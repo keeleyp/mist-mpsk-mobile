@@ -19,9 +19,11 @@ On first start the app creates the user **admin** with password **admin**. Whoev
 | Role | Scope | Can |
 |---|---|---|
 | **Admin** | Every org config, every site | Everything: site keys, **Org Level Keys**, and adding, resetting and deleting any user |
-| **Site admin** | One org and one site, chosen when the user is added | See, create, share and delete every key at that site. Add, reset and delete **guest** users for that site |
-| **Guest** | One org, and one site or **all sites**, chosen when the user is added | Create keys and see **only keys with the Mist PSK role `guest`**. Every key a guest creates is saved with role `guest`. Guests can't delete keys |
+| **Site admin** | One org and one site, chosen when the user is added | See, create, share and delete every key at that site. Add, reset and delete **guest** and **self service** users for that site |
+| **Guest** | One org, one site or **all sites**, and **one SSID**, all chosen when the user is added | Create keys on their SSID (they never pick one) and see **only keys with the Mist PSK role `guest`**. Every key a guest creates is saved with role `guest`. Guests can't delete keys |
+| **Self service** | One org, one site and one SSID, plus how long visitors' keys last (default 1 day) | A **kiosk screen** (see below) |
 
+- **SSIDs for guest and self-service users** come from the chosen site's derived WLANs (`/sites/{id}/wlans/derived`). For an all-sites guest they come from the org's WLAN templates, because Mist has no org-level `derived` call. If a site doesn't broadcast a guest's SSID, the guest gets a clear message there.
 - **Users** (in the ⋮ menu and the bar at the bottom of every page) lists users and adds new ones. A first password is generated for each new user, shown once, and must be changed at first sign-in.
 - Every page has **Sign out** at the bottom, and **Change password** is in the ⋮ menu.
 - Users live in `users.json` (git-ignored, mode 600), which holds salted password hashes only. A user's role and site take effect at their next page load, and a deleted user is signed out at once.
@@ -30,6 +32,15 @@ On first start the app creates the user **admin** with password **admin**. Whoev
   ```bash
   .venv/bin/python3 app.py --reset-admin
   ```
+
+### Self-service kiosk
+
+Sign a tablet or phone at reception in as a **self service** user. It then only shows a form asking visitors for their **name, company and email**. When a visitor submits it:
+
+- A key is created on the user's SSID with role `self_service`. It is named "Name - Company" (with "(2)", "(3)" and so on added for repeats), the visitor's email is saved on the Mist key, and it expires as set for the user.
+- The screen shows the Wi-Fi QR code, the password and the expiry, with a **Finished** button that clears it for the next visitor. The screen also clears itself after 3 minutes.
+- There's no menu or other page to reach. **Staff: sign out** asks for the user's password again before it signs out.
+- Admins and the site admin see these keys in the site list. Guests don't. Each visitor sign-up (name, company and email) is written to the activity log.
 
 Upgrading from 1.0: on its first start, 1.1 copies any `[user NAME]` logins from `web.conf` into `users.json` as admins, keeping their passwords, and also creates **admin/admin**.
 

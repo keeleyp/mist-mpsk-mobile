@@ -4,8 +4,11 @@ App users for Mist MPSK Mobile, kept in users.json (git-ignored, mode 600).
 Roles:
   admin       every org config, every site, org-level keys, manages all users
   site_admin  one org config + one site: full key management there, adds guests for it
-  guest       one org config + one site or all sites: only creates and sees
-              keys with the Mist PSK role "guest"
+  guest       one org config + one site or all sites + one SSID: only creates
+              and sees keys with the Mist PSK role "guest"
+  self_service one org config + one site + one SSID: a kiosk screen where
+              visitors enter name/company/email and get a key (PSK role
+              "self_service"); signing out needs the password again
 """
 
 import json
@@ -18,8 +21,10 @@ from pathlib import Path
 
 from werkzeug.security import check_password_hash, generate_password_hash
 
-ROLES = {"admin": "Admin", "site_admin": "Site admin", "guest": "Guest"}
+ROLES = {"admin": "Admin", "site_admin": "Site admin", "guest": "Guest", "self_service": "Self service"}
 GUEST_PSK_ROLE = "guest"
+SELF_SERVICE_PSK_ROLE = "self_service"
+KEY_EXPIRY = {"1d": "1 day", "7d": "7 days", "30d": "30 days", "90d": "90 days", "": "Never"}
 MIN_PASSWORD = 8
 DEFAULT_ADMIN = "admin"
 
@@ -102,8 +107,9 @@ class UserStore:
             return created
 
     @staticmethod
-    def _record(role, config, site_id, site_name, created_by):
+    def _record(role, config, site_id, site_name, created_by, ssid=None, key_expiry=None):
         return {"role": role, "config": config, "site_id": site_id, "site_name": site_name,
+                "ssid": ssid, "key_expiry": key_expiry,
                 "must_change": False, "created_by": created_by, "created": int(time.time())}
 
     # -- reads -----------------------------------------------------------
@@ -128,7 +134,8 @@ class UserStore:
 
     # -- writes ----------------------------------------------------------
 
-    def add(self, name, role, config, site_id, site_name, password, created_by) -> dict:
+    def add(self, name, role, config, site_id, site_name, password, created_by,
+            ssid=None, key_expiry=None) -> dict:
         name = (name or "").strip()
         if not valid_username(name):
             raise UserError("User names are 1-40 letters, numbers or . _ - @ (no spaces).")
@@ -136,17 +143,23 @@ class UserStore:
             raise UserError("Pick a role.")
         if role != "admin" and not config:
             raise UserError("Pick the org for this user.")
-        if role == "site_admin" and not site_id:
-            raise UserError("A site admin needs a site.")
+        if role in ("site_admin", "self_service") and (not site_id or site_id == "*"):
+            raise UserError(f"A {ROLES[role].lower()} user needs one site.")
+        if role in ("guest", "self_service") and not ssid:
+            raise UserError("Pick the SSID this user's keys are for.")
+        if role == "self_service" and (key_expiry or "") not in KEY_EXPIRY:
+            raise UserError("Pick how long visitors' keys last.")
         if len(password) < MIN_PASSWORD:
             raise UserError(f"Passwords need at least {MIN_PASSWORD} characters.")
         with self._lock:
             self._load()
             if any(n.lower() == name.lower() for n in self._users):
                 raise UserError(f"There is already a user called {name}.")
-            rec = self._record(role, None if role == "admin" else config,
-                               None if role == "admin" else site_id,
-                               None if role == "admin" else site_name, created_by)
+            scoped = role != "admin"
+            rec = self._record(role, config if scoped else None, site_id if scoped else None,
+                               site_name if scoped else None, created_by,
+                               ssid=ssid if role in ("guest", "self_service") else None,
+                               key_expiry=(key_expiry or "") if role == "self_service" else None)
             rec["password_hash"] = generate_password_hash(password)
             rec["must_change"] = True
             self._users[name] = rec

@@ -43,8 +43,11 @@ class Base(unittest.TestCase):
             self.csrf = s["csrf"]
         return r
 
-    def add(self, name, role, site_id=None, site_name=None, password="first-pass-1"):
-        self.store.add(name, role, CONFIG, site_id, site_name, password, created_by="test")
+    def add(self, name, role, site_id=None, site_name=None, password="first-pass-1", ssid=None, key_expiry=None):
+        if role in ("guest", "self_service") and ssid is None:
+            ssid = "Corp-PSK"
+        self.store.add(name, role, CONFIG, site_id, site_name, password, created_by="test",
+                       ssid=ssid, key_expiry=key_expiry if key_expiry is not None else "1d")
         self.store.set_password(name, password)      # skip the forced change
         return name
 
@@ -175,11 +178,17 @@ class TestAdmin(Base):
         r = self.c.get(f"/users/new?config={CONFIG}&name=bob&role=guest")
         self.assertIn(b"All sites", r.data)
         self.assertIn(b"London Office", r.data)
+        r = self.c.get(f"/users/new?config={CONFIG}&name=bob&role=guest&site_id=*")
+        self.assertIn(b'value="Corp-PSK"', r.data)            # org template SSID with local keys
+        self.assertNotIn(b'value="Cloud-Keys"', r.data)       # cloud PSK WLAN isn't for site keys
         r = self.c.post("/users/new", data={"csrf": self.csrf, "name": "bob", "role": "guest", "config": CONFIG,
                                             "site_id": "*", "password": "bobs-first-1"})
+        self.assertIn(b"Pick the SSID", r.data)
+        r = self.c.post("/users/new", data={"csrf": self.csrf, "name": "bob", "role": "guest", "config": CONFIG,
+                                            "site_id": "*", "ssid": "Corp-PSK", "password": "bobs-first-1"})
         self.assertIn(b"bobs-first-1", r.data)
         bob = self.store.get("bob")
-        self.assertEqual((bob["role"], bob["site_id"], bob["must_change"]), ("guest", "*", True))
+        self.assertEqual((bob["role"], bob["site_id"], bob["ssid"], bob["must_change"]), ("guest", "*", "Corp-PSK", True))
         r = self.c.post("/users/new", data={"csrf": self.csrf, "name": "sam", "role": "site_admin",
                                             "config": CONFIG, "site_id": "*", "password": "sams-first-1"})
         self.assertIn(b"Pick a site", r.data)
@@ -217,11 +226,18 @@ class TestSiteAdmin(Base):
         self.assertIn(b"Delete this PSK", self.c.get("/site/s1/psk/p1").data)
 
     def test_adds_only_guests_for_own_site(self):
+        r = self.c.get("/users/new")
+        self.assertIn(b'value="IoT-PSK"', r.data)            # London's SSIDs
+        self.assertNotIn(b'value="admin"', r.data)           # can't offer admin roles
         r = self.c.post("/users/new", data={"csrf": self.csrf, "name": "gail", "role": "admin", "config": "x",
-                                            "site_id": "s2", "password": "gails-first-1"})
+                                            "site_id": "s2", "ssid": "IoT-PSK", "password": "gails-first-1"})
         self.assertIn(b"User added", r.data)
         gail = self.store.get("gail")
-        self.assertEqual((gail["role"], gail["site_id"], gail["config"]), ("guest", "s1", CONFIG))
+        self.assertEqual((gail["role"], gail["site_id"], gail["config"], gail["ssid"]), ("guest", "s1", CONFIG, "IoT-PSK"))
+        r = self.c.post("/users/new", data={"csrf": self.csrf, "name": "desk", "role": "self_service",
+                                            "ssid": "Corp-PSK", "key_expiry": "7d", "password": "desk-first-1"})
+        self.assertIn(b"User added", r.data)
+        self.assertEqual(self.store.get("desk")["key_expiry"], "7d")
         self.add("other", "guest", "s2", "Manchester Store")
         self.assertEqual(self.c.post("/users/other/delete", data={"csrf": self.csrf}).status_code, 403)
         self.assertEqual(self.c.post("/users/admin/reset", data={"csrf": self.csrf}).status_code, 403)
@@ -244,10 +260,14 @@ class TestGuest(Base):
         self.assertNotIn(b"Delete this PSK", r.data)
         self.assertEqual(self.c.post("/site/s1/psk/p3/delete",
                                      data={"csrf": self.csrf, "confirm_name": "Visitor Bob"}).status_code, 403)
-        r = self.c.post("/site/s1/new", data={"csrf": self.csrf, "name": "Visitor Ann", "ssid": "Corp-PSK",
+        form = self.c.get("/site/s1/new").data
+        self.assertNotIn(b'name="ssid"', form)
+        self.assertIn(b"Corp-PSK", form)
+        r = self.c.post("/site/s1/new", data={"csrf": self.csrf, "name": "Visitor Ann", "ssid": "IoT-PSK",
                                               "passphrase": "AnnKey123456", "usage": "multi"})
         self.assertEqual(r.status_code, 302)
         self.assertEqual(self.fake.psks["s1"][-1]["role"], "guest")
+        self.assertEqual(self.fake.psks["s1"][-1]["ssid"], "Corp-PSK")   # the assigned SSID wins
         self.assertEqual(self.c.get("/site/s2").status_code, 403)
         self.assertEqual(self.c.get("/org").status_code, 403)
         self.assertEqual(self.c.get("/users").status_code, 403)
@@ -258,7 +278,60 @@ class TestGuest(Base):
         r = self.c.get("/")
         self.assertIn(b"Manchester Store", r.data)
         self.assertNotIn(b"Org Level Keys", r.data)
-        self.assertEqual(self.c.get("/site/s2/new").status_code, 200)
+        self.assertEqual(self.c.get("/site/s1/new").status_code, 200)
+        r = self.c.get("/site/s2/new")                     # Manchester doesn't broadcast Corp-PSK
+        self.assertEqual(r.status_code, 409)
+        self.assertIn(b"Corp-PSK", r.data)
+
+
+class TestSelfService(Base):
+    def setUp(self):
+        super().setUp()
+        self.add("desk", "self_service", "s1", "London Office", ssid="Corp-PSK", key_expiry="1d")
+        self.login("desk", "first-pass-1")
+
+    def test_kiosk_flow(self):
+        self.assertTrue(self.c.get("/").headers["Location"].endswith("/kiosk"))
+        self.assertTrue(self.c.get("/site/s1").headers["Location"].endswith("/kiosk"))
+        self.assertTrue(self.c.get("/users").headers["Location"].endswith("/kiosk"))
+        r = self.c.get("/kiosk")
+        self.assertIn(b"Get Wi-Fi access", r.data)
+        self.assertNotIn(b"Sign out</button>", r.data)       # no plain sign-out
+        r = self.c.post("/kiosk", data={"csrf": self.csrf, "visitor": "Ann Lee", "company": "Acme", "email": "bad"})
+        self.assertIn(b"valid email", r.data)
+        for _ in range(2):
+            r = self.c.post("/kiosk", data={"csrf": self.csrf, "visitor": "Ann  Lee", "company": "Acme",
+                                            "email": "ann@example.com"})
+            self.assertIn(b"Finished", r.data)
+            self.assertIn(b"<svg", r.data)
+        keys = [p for p in self.fake.psks["s1"] if p.get("role") == "self_service"]
+        self.assertEqual([k["name"] for k in keys], ["Ann Lee - Acme", "Ann Lee - Acme (2)"])
+        self.assertEqual(keys[0]["email"], "ann@example.com")
+        self.assertEqual(keys[0]["ssid"], "Corp-PSK")
+        self.assertIn("expire_time", keys[0])
+        self.assertIn(keys[1]["passphrase"].encode(), r.data)
+        self.assertNotEqual(keys[0]["passphrase"], keys[1]["passphrase"])
+
+    def test_signout_needs_password(self):
+        r = self.c.post("/logout", data={"csrf": self.csrf})
+        self.assertTrue(r.headers["Location"].endswith("/kiosk"))
+        self.assertEqual(self.c.get("/kiosk").status_code, 200)
+        r = self.c.post("/kiosk/signout", data={"csrf": self.csrf, "password": "wrong"})
+        self.assertEqual(r.status_code, 401)
+        self.assertEqual(self.c.get("/kiosk").status_code, 200)
+        r = self.c.post("/kiosk/signout", data={"csrf": self.csrf, "password": "first-pass-1"})
+        self.assertTrue(r.headers["Location"].endswith("/login"))
+        self.assertEqual(self.c.get("/kiosk").status_code, 302)
+
+    def test_admins_see_self_service_keys_guests_dont(self):
+        self.c.post("/kiosk", data={"csrf": self.csrf, "visitor": "Zed", "company": "Co", "email": "z@co.uk"})
+        admin = self.app.test_client()
+        self.login(client=admin)
+        self.assertIn(b"Zed - Co", admin.get("/site/s1").data)
+        self.add("gail", "guest", "s1", "London Office")
+        guest = self.app.test_client()
+        self.login("gail", "first-pass-1", client=guest)
+        self.assertNotIn(b"Zed - Co", guest.get("/site/s1").data)
 
 
 class TestSsidAllowList(Base):

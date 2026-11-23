@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Sign out - MPSK{% endblock %}
+{% block back %}<a class="back" href="{{ url_for('kiosk') }}" aria-label="Back">&lsaquo;</a>{% endblock %}
+{% block heading %}Staff sign out{% endblock %}
+{% block content %}
+<form method="post" class="card">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <p class="small">Enter the password for <b>{{ user.name }}</b> to sign this screen out.</p>
+  <label>Password <input type="password" name="password" autocomplete="current-password" required autofocus></label>
+  <button class="danger block">Sign out</button>
+</form>
+<a class="secondary block" href="{{ url_for('kiosk') }}">Cancel</a>
+{% endblock %}

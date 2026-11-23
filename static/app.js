@@ -132,6 +132,11 @@
     var role = checked ? checked.value : "guest";
     form.querySelectorAll("[data-role-hint]").forEach(function (h) { h.hidden = h.dataset.roleHint !== role; });
     if (scope) scope.hidden = role === "admin";
+    form.querySelectorAll("[data-role-only]").forEach(function (el) { el.hidden = el.dataset.roleOnly !== role; });
+    var ssidScope = form.querySelector("[data-ssid-scope]");
+    if (ssidScope) ssidScope.hidden = !(role === "guest" || role === "self_service");
+    var ssidSel = document.getElementById("ssid-select");
+    if (ssidSel) ssidSel.required = role === "guest" || role === "self_service";
     if (siteSel) {
       siteSel.required = role !== "admin";
       var all = siteSel.querySelector("[data-guest-only]");
@@ -143,11 +148,15 @@
   }
   radios.forEach(function (r) { r.addEventListener("change", syncRole); });
   syncRole();
-  var cfg = form.querySelector("[data-reload-on-change]");
-  if (cfg) cfg.addEventListener("change", function () {
-    var checked = form.querySelector("input[name=role]:checked");
-    var q = new URLSearchParams({ config: cfg.value, name: form.elements.name.value,
-                                  role: checked ? checked.value : "guest" });
-    location.href = form.getAttribute("action") + "?" + q.toString();
+  // Org or site changed: reload so the site / SSID lists match (never sends the password).
+  form.querySelectorAll("[data-reload-on-change]").forEach(function (sel) {
+    sel.addEventListener("change", function () {
+      var checked = form.querySelector("input[name=role]:checked");
+      var q = new URLSearchParams({ name: form.elements.name.value, role: checked ? checked.value : "guest" });
+      if (form.elements.config) q.set("config", form.elements.config.value);
+      if (form.elements.site_id && sel.name !== "config") q.set("site_id", form.elements.site_id.value);
+      if (form.elements.key_expiry) q.set("key_expiry", form.elements.key_expiry.value);
+      location.href = form.getAttribute("action") + "?" + q.toString();
+    });
   });
 })();

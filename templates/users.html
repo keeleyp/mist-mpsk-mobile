@@ -3,13 +3,13 @@
 {% block back %}<a class="back" href="{{ url_for('index') }}" aria-label="Back">&lsaquo;</a>{% endblock %}
 {% block heading %}Users{% endblock %}
 {% block content %}
-<a class="primary block fab-like" href="{{ url_for('new_user') }}">+ Add {{ 'user' if is_admin else 'guest user' }}</a>
+<a class="primary block fab-like" href="{{ url_for('new_user') }}">+ Add user</a>
 {% for t in rows %}
 <details class="card user-card">
   <summary>
     <span class="row-main">
       <span class="row-title">{{ t.name }}{% if t.name == user.name %} <span class="tag">you</span>{% endif %}{% if t.must_change %} <span class="tag">new password pending</span>{% endif %}</span>
-      <span class="row-sub">{{ roles[t.role] }}{% if t.role != 'admin' %} &middot; {{ t.site_name or '?' }} &middot; {{ config_label(t.config) }}{% endif %}</span>
+      <span class="row-sub">{{ roles[t.role] }}{% if t.role != 'admin' %} &middot; {{ t.site_name or '?' }}{% if t.ssid %} &middot; {{ t.ssid }}{% endif %}{% endif %}</span>
     </span>
   </summary>
   <div class="kv small">
@@ -17,6 +17,8 @@
     {% if t.role != 'admin' %}
     <div><span class="k">Org</span><span class="v">{{ config_label(t.config) }}</span></div>
     <div><span class="k">Site</span><span class="v">{{ t.site_name or t.site_id }}</span></div>
+    {% if t.ssid %}<div><span class="k">SSID</span><span class="v">{{ t.ssid }}</span></div>{% endif %}
+    {% if t.role == 'self_service' %}<div><span class="k">Visitor keys last</span><span class="v">{{ key_expiry_choices.get(t.key_expiry or '', t.key_expiry) }}</span></div>{% endif %}
     {% endif %}
     <div><span class="k">Added by</span><span class="v">{{ t.created_by }}{% if t.created %}, {{ fmt_expiry(t.created) }}{% endif %}</span></div>
   </div>

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Wi-Fi access - {{ site.name }}{% endblock %}
+{% block heading %}{{ site.name }}{% endblock %}
+{% block content %}
+<div class="hero">
+  <img src="{{ url_for('static', filename='icons/icon-192.png') }}" alt="" width="64" height="64">
+  <h1>Get Wi-Fi access</h1>
+  <p class="muted">Enter your details to get your own Wi-Fi password.</p>
+</div>
+{% if unavailable %}
+<div class="flash warn">Wi-Fi sign-up isn't available right now. Please ask at reception.</div>
+{% else %}
+{% if problems %}<div class="flash error">{% for p in problems %}<div>{{ p }}</div>{% endfor %}</div>{% endif %}
+<form method="post" class="card kiosk-form" autocomplete="off">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label>Your name <input name="visitor" value="{{ form.visitor or '' }}" maxlength="40" required autocomplete="off" autocapitalize="words"></label>
+  <label>Company <input name="company" value="{{ form.company or '' }}" maxlength="40" required autocomplete="off" autocapitalize="words"></label>
+  <label>Email <input name="email" type="email" value="{{ form.email or '' }}" maxlength="120" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="email"></label>
+  <button class="primary block">Get my Wi-Fi password</button>
+</form>
+{% endif %}
+<p class="center"><a class="muted small" href="{{ url_for('kiosk_signout') }}">Staff: sign out</a></p>
+{% endblock %}

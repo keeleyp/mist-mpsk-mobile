@@ -11,6 +11,9 @@
     <input name="name" value="{{ form.name or '' }}" maxlength="64" required placeholder="e.g. Reception iPad"
            autocomplete="off">
   </label>
+  {% if fixed_ssid %}
+  <div class="fixed-field"><span class="muted">Wi-Fi</span> <b>{{ fixed_ssid }}</b></div>
+  {% else %}
   <label>SSID
     <select name="ssid" required>
       {% if not form.ssid %}<option value="" disabled selected>Choose&hellip;</option>{% endif %}
@@ -19,6 +22,7 @@
       {% endfor %}
     </select>
   </label>
+  {% endif %}
   <label>Passphrase
     <div class="input-row">
       <input name="passphrase" id="passphrase" value="{{ form.passphrase }}" minlength="8" maxlength="63" required

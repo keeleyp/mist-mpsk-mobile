@@ -277,6 +277,19 @@ class Mist:
         result = [e for e in out.values() if not self.cfg.ssids or e["ssid"] in self.cfg.ssids]
         return sorted(result, key=lambda e: e["ssid"].lower())
 
+    def org_local_psk_ssids(self) -> list:
+        """SSIDs of the org's WLANs (templates) that use local site PSKs - the
+        choices for a user who works at every site."""
+        ssids = set()
+        for w in self.get_all(f"/orgs/{self.cfg.org_id}/wlans"):
+            if w.get("enabled", True) is False or not w.get("ssid"):
+                continue
+            if (w.get("auth") or {}).get("type") in PSK_AUTH_TYPES and not dynamic_psk_problem(w):
+                ssids.add(w["ssid"])
+        if self.cfg.ssids:
+            ssids &= set(self.cfg.ssids)
+        return sorted(ssids, key=str.lower)
+
     def org_psks(self) -> list:
         return sorted(self.get_all(f"/orgs/{self.cfg.org_id}/psks"),
                       key=lambda p: ((p.get("name") or "").lower(), p.get("ssid") or ""))

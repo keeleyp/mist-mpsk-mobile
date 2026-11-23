@@ -35,9 +35,9 @@ from werkzeug.security import generate_password_hash
 import mpsk_core as core
 import users as userlib
 from mpsk_core import MpskError
-from users import GUEST_PSK_ROLE, ROLES, UserError, UserStore
+from users import GUEST_PSK_ROLE, KEY_EXPIRY, ROLES, SELF_SERVICE_PSK_ROLE, UserError, UserStore
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_WEB_CONF = BASE_DIR / "web.conf"
@@ -53,6 +53,7 @@ LOCKOUT_SECONDS = 15 * 60
 SITE_CACHE_TTL = 5 * 60
 RECENT_SITES = 5
 ALL_SITES = "*"
+KIOSK_RESET_SECONDS = 180      # the key screen goes back to the blank form after this
 
 log = logging.getLogger("mist_mpsk_mobile")
 
@@ -317,6 +318,7 @@ def create_app(web_conf: dict, store: UserStore, config_folder: Path = BASE_DIR,
     def inject_globals():
         u = current_user()
         ctx = {"version": __version__, "user": u, "csrf": session.get("csrf", ""), "roles": ROLES,
+               "key_expiry_choices": KEY_EXPIRY, "kiosk": bool(u and u["role"] == "self_service"),
                "fmt_expiry": fmt_expiry, "vlan_text": vlan_text}
         if u:
             ctx.update(config_name=session.get("config"), config_count=len(user_configs(u)),
@@ -326,6 +328,7 @@ def create_app(web_conf: dict, store: UserStore, config_folder: Path = BASE_DIR,
 
     PUBLIC = {"login", "static", "manifest", "service_worker", "offline"}
     WHILE_MUST_CHANGE = {"change_password", "logout"}
+    KIOSK_ENDPOINTS = {"kiosk", "kiosk_signout", "change_password"}
 
     @app.before_request
     def require_login():
@@ -340,6 +343,8 @@ def create_app(web_conf: dict, store: UserStore, config_folder: Path = BASE_DIR,
         session.permanent = True
         if u.get("must_change") and request.endpoint not in WHILE_MUST_CHANGE:
             return redirect(url_for("change_password"))
+        if u["role"] == "self_service" and request.endpoint not in KIOSK_ENDPOINTS:
+            return redirect(url_for("kiosk"))
         return None
 
     @app.after_request
@@ -510,12 +515,19 @@ def create_app(web_conf: dict, store: UserStore, config_folder: Path = BASE_DIR,
         api = current_api()
         form = {"usage": "multi"}
         usable = [w for w in wlans if w["usable"]]
+        fixed_ssid = u.get("ssid") if is_guest(u) else None
+        if fixed_ssid and fixed_ssid not in {w["ssid"] for w in usable}:
+            return render_template("error.html", message=(
+                f"Your keys are for the SSID {fixed_ssid}, which isn't available here for site keys. "
+                "Ask an admin to check your user.")), 409
         if len(usable) == 1:
             form["ssid"] = usable[0]["ssid"]
         problems = []
         if request.method == "POST":
             check_csrf()
             form = request.form.to_dict()
+            if fixed_ssid:
+                form["ssid"] = fixed_ssid
             if form.get("expiry") == "date":
                 form["expiry"] = form.get("expiry_date", "").strip() or "date"
             role = GUEST_PSK_ROLE if is_guest(u) else None
@@ -537,7 +549,8 @@ def create_app(web_conf: dict, store: UserStore, config_folder: Path = BASE_DIR,
             form["passphrase"] = core.generate_passphrase(api.cfg)
         return render_template("new.html", subtitle=subtitle, back_url=back_url, wlans=wlans, form=form,
                                problems=problems, alphabet=api.cfg.alphabet, length=api.cfg.length,
-                               today=datetime.now().strftime("%Y-%m-%d"), guest_key=is_guest(u))
+                               today=datetime.now().strftime("%Y-%m-%d"), guest_key=is_guest(u),
+                               fixed_ssid=fixed_ssid)
 
     @app.route("/site/<site_id>/new", methods=["GET", "POST"])
     def new_psk(site_id):
@@ -689,7 +702,7 @@ def create_app(web_conf: dict, store: UserStore, config_folder: Path = BASE_DIR,
             return False
         if is_admin(actor):
             return True
-        return (actor["role"] == "site_admin" and target["role"] == "guest"
+        return (actor["role"] == "site_admin" and target["role"] in ("guest", "self_service")
                 and target.get("config") == actor.get("config") and target.get("site_id") == actor.get("site_id"))
 
     def require_user_admin():
@@ -711,29 +724,43 @@ def create_app(web_conf: dict, store: UserStore, config_folder: Path = BASE_DIR,
                 if is_admin(u) or manageable(u, t) or t["name"] == u["name"]]
         return render_template("users.html", rows=rows, config_label=config_label)
 
+    def ssid_choices(config, site_id) -> list:
+        """SSIDs a guest / self-service user can be tied to."""
+        if not config or not site_id:
+            return []
+        api = api_for(config)
+        if site_id == ALL_SITES:
+            return api.org_local_psk_ssids()
+        return [w["ssid"] for w in api.site_wlans(site_id) if w["usable"]]
+
     @app.route("/users/new", methods=["GET", "POST"])
     def new_user():
         u = require_user_admin()
         configs = find_config_files(config_folder) if is_admin(u) else {}
         if request.method == "POST":
             form = request.form.to_dict()
-        else:   # re-shown after picking an org: keep name/role, never a password in the URL
-            form = {k: v for k, v in request.args.items() if k in ("name", "role", "config")}
+        else:   # re-shown after picking an org or site: never a password in the URL
+            form = {k: v for k, v in request.args.items() if k in ("name", "role", "config", "site_id", "key_expiry")}
         if not is_admin(u):
-            form.update(role="guest", config=u["config"], site_id=u["site_id"])
+            if form.get("role") not in ("guest", "self_service"):
+                form["role"] = "guest"
+            form.update(config=u["config"], site_id=u["site_id"])
         form.setdefault("role", "guest")
         form.setdefault("config", next(iter(configs)) if len(configs) == 1 else "")
+        form.setdefault("key_expiry", "1d")
         form.setdefault("password", userlib.temp_password())
-        sites, problems = [], []
-        if is_admin(u) and form.get("config") in configs:
-            try:
+        sites, ssids, problems = [], [], []
+        try:
+            if is_admin(u) and form.get("config") in configs:
                 sites = site_list(api_for(form["config"]))
-            except MpskError as e:
-                problems.append(f"Couldn't read the sites for {form['config']}: {e}")
+            if form.get("role") in ("guest", "self_service") and form.get("site_id"):
+                ssids = ssid_choices(form["config"], form["site_id"])
+        except MpskError as e:
+            problems.append(f"Couldn't read {form.get('config')} from Mist: {e}")
         if request.method == "POST":
             check_csrf()
             role, config, site_id = form.get("role"), form.get("config"), form.get("site_id") or ""
-            site_name = None
+            site_name, ssid = None, None
             if role != "admin":
                 if is_admin(u):
                     if config not in configs:
@@ -743,24 +770,29 @@ def create_app(web_conf: dict, store: UserStore, config_folder: Path = BASE_DIR,
                     else:
                         match = next((s for s in sites if s["id"] == site_id), None)
                         if not match:
-                            problems.append("Pick a site." if role == "site_admin" else "Pick a site, or All sites.")
+                            problems.append("Pick a site, or All sites." if role == "guest" else "Pick a site.")
                         else:
                             site_name = match["name"]
                 else:
                     site_name = u.get("site_name")
+            if role in ("guest", "self_service") and not problems:
+                ssid = form.get("ssid") or ""
+                if ssid not in ssids:
+                    problems.append("Pick the SSID this user's keys are for.")
             if not problems:
                 try:
                     created = store.add(form.get("name", ""), role, config, site_id or None, site_name,
-                                        form.get("password", ""), created_by=u["name"])
+                                        form.get("password", ""), created_by=u["name"], ssid=ssid,
+                                        key_expiry=form.get("key_expiry"))
                 except UserError as e:
                     problems.append(str(e))
                 else:
-                    activity("added user", target=created["name"], role=role,
-                             config=created.get("config"), site=site_name)
+                    activity("added user", target=created["name"], role=role, config=created.get("config"),
+                             site=site_name, ssid=ssid)
                     return render_template("user_created.html", created=created, password=form["password"],
                                            config_label=config_label)
-        return render_template("user_new.html", form=form, configs=configs, sites=sites, problems=problems,
-                               all_sites=ALL_SITES, config_label=config_label,
+        return render_template("user_new.html", form=form, configs=configs, sites=sites, ssids=ssids,
+                               problems=problems, all_sites=ALL_SITES, config_label=config_label,
                                fixed=None if is_admin(u) else u)
 
     def target_user(name):
@@ -787,6 +819,85 @@ def create_app(web_conf: dict, store: UserStore, config_folder: Path = BASE_DIR,
         activity("deleted user", target=t["name"], role=t["role"])
         flash(f"User {t['name']} deleted.", "ok")
         return redirect(url_for("users_page"))
+
+    # -- self-service kiosk ----------------------------------------------
+
+    EMAIL_RE = __import__("re").compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+    @app.route("/kiosk", methods=["GET", "POST"])
+    def kiosk():
+        u = current_user()
+        if u["role"] != "self_service":
+            return redirect(url_for("index"))
+        api = current_api()
+        site = api.site(u["site_id"])
+        wlan = next((w for w in api.site_wlans(u["site_id"]) if w["ssid"] == u.get("ssid")), None)
+        if not wlan or not wlan["usable"]:
+            activity("kiosk unavailable", site=site.get("name"), ssid=u.get("ssid"))
+            return render_template("kiosk.html", site=site, unavailable=True, form={}, problems=[])
+        form, problems = {}, []
+        if request.method == "POST":
+            check_csrf()
+            form = {k: " ".join(request.form.get(k, "").split()) for k in ("visitor", "company", "email")}
+            if not form["visitor"]:
+                problems.append("Please enter your name.")
+            if not form["company"]:
+                problems.append("Please enter your company.")
+            if not EMAIL_RE.match(form["email"]) or len(form["email"]) > 120:
+                problems.append("Please enter a valid email address.")
+            if len(form["visitor"]) > 40 or len(form["company"]) > 40:
+                problems.append("Please keep your name and company to 40 characters each.")
+            if not problems:
+                existing = api.psks(u["site_id"])
+                base = f"{form['visitor']} - {form['company']}"[:58]
+                taken = {(p.get("name") or "").lower() for p in existing if p.get("ssid") == u["ssid"]}
+                name, n = base, 2
+                while name.lower() in taken:
+                    name, n = f"{base} ({n})", n + 1
+                passphrase = core.generate_passphrase(
+                    api.cfg, avoid={p.get("passphrase") for p in existing if p.get("ssid") == u["ssid"]})
+                body, problems = core.validate_new_psk(
+                    {"name": name, "ssid": u["ssid"], "passphrase": passphrase, "usage": "multi",
+                     "expiry": u.get("key_expiry") or ""}, [wlan], existing, role=SELF_SERVICE_PSK_ROLE)
+                if not problems:
+                    body["email"] = form["email"]
+                    try:
+                        api.create_psk(u["site_id"], body)
+                    except MpskError as e:
+                        activity("kiosk create failed", site=site.get("name"), psk=name, message=str(e))
+                        problems = ["Sorry, your key couldn't be created. Please ask at reception."]
+                    else:
+                        activity("kiosk created", config=api.cfg.name, site=site.get("name"), psk=name,
+                                 email=form["email"], ssid=u["ssid"],
+                                 expires=fmt_expiry(body.get("expire_time")) if body.get("expire_time") else None)
+                        payload = core.wifi_qr_payload(u["ssid"], passphrase, wlan["hidden"])
+                        return render_template("kiosk_done.html", site=site, ssid=u["ssid"], passphrase=passphrase,
+                                               visitor=form["visitor"], qr=Markup(core.qr_svg(payload)),
+                                               expires=fmt_expiry(body.get("expire_time")) if body.get("expire_time") else None,
+                                               reset_seconds=KIOSK_RESET_SECONDS)
+        return render_template("kiosk.html", site=site, form=form, problems=problems, unavailable=False)
+
+    @app.route("/kiosk/signout", methods=["GET", "POST"])
+    def kiosk_signout():
+        u = current_user()
+        if request.method == "POST":
+            check_csrf()
+            key = (request.remote_addr, u["name"].lower())
+            if limiter.locked(key):
+                activity("kiosk sign-out blocked", reason="locked out after repeated wrong passwords")
+                flash(f"Too many wrong passwords - try again in {LOCKOUT_SECONDS // 60} minutes.", "error")
+                return render_template("kiosk_signout.html"), 429
+            if not store.check_password(u["name"], request.form.get("password", ""), dummy_hash):
+                limiter.fail(key)
+                activity("kiosk sign-out failed", reason="wrong password")
+                flash("That password isn't right.", "error")
+                return render_template("kiosk_signout.html"), 401
+            limiter.clear(key)
+            activity("signed out", via="kiosk")
+            session.clear()
+            flash("Signed out.", "info")
+            return redirect(url_for("login"))
+        return render_template("kiosk_signout.html")
 
     return app
 

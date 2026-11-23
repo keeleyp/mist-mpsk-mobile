@@ -122,3 +122,6 @@ fieldset.roles .hint { margin-top: 2px; }
 button.link, button.link.danger { background: none; border: 0; padding: 0; min-height: 0; font-weight: 500;
                                   display: inline; color: var(--accent); }
 button.link.danger { color: var(--danger); }
+.fixed-field { margin: 0 0 14px; padding: 12px; border-radius: 10px; background: var(--bg); border: 1px solid var(--border); }
+.kiosk-form input { font-size: 18px; }
+.kiosk-pass { font-size: 22px; letter-spacing: .03em; user-select: all; -webkit-user-select: all; }

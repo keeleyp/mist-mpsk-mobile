@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Your Wi-Fi - {{ site.name }}{% endblock %}
+{% block heading %}{{ site.name }}{% endblock %}
+{% block content %}
+<meta http-equiv="refresh" content="{{ reset_seconds }};url={{ url_for('kiosk') }}">
+<div class="flash ok center">Welcome, <b>{{ visitor }}</b>! Here is your Wi-Fi.</div>
+<div class="card qr-card">
+  <div class="qr" aria-label="Wi-Fi QR code">{{ qr }}</div>
+  <p class="muted small center">Scan with your phone's camera to join</p>
+  <div class="kv">
+    <div><span class="k">Wi-Fi</span><span class="v">{{ ssid }}</span></div>
+    <div><span class="k">Password</span><span class="v mono kiosk-pass">{{ passphrase }}</span></div>
+    {% if expires %}<div><span class="k">Valid until</span><span class="v">{{ expires }}</span></div>{% endif %}
+  </div>
+</div>
+<p class="center">When you've connected or noted your password, press <b>Finished</b>.</p>
+<a class="primary block" href="{{ url_for('kiosk') }}">Finished</a>
+<p class="muted small center">This screen clears itself after {{ reset_seconds // 60 }} minutes.</p>
+{% endblock %}

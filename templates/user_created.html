@@ -11,6 +11,8 @@
       <button type="button" class="icon-btn" data-copy="#u-pass">Copy</button></span></div>
     <div><span class="k">Role</span><span class="v">{{ roles[created.role] }}</span></div>
     {% if created.role != 'admin' %}<div><span class="k">Site</span><span class="v">{{ created.site_name }}</span></div>{% endif %}
+    {% if created.ssid %}<div><span class="k">SSID</span><span class="v">{{ created.ssid }}</span></div>{% endif %}
+    {% if created.role == 'self_service' %}<div><span class="k">Visitor keys last</span><span class="v">{{ key_expiry_choices.get(created.key_expiry or '', '') }}</span></div>{% endif %}
   </div>
   <p class="muted small">They'll be asked to choose their own password when they first sign in.</p>
 </div>

@@ -18,7 +18,7 @@
 <header class="topbar">
   {% block back %}<span class="back-spacer"></span>{% endblock %}
   <div class="title">{% block heading %}MPSK{% endblock %}</div>
-  {% if user %}
+  {% if user and not kiosk %}
   <details class="menu">
     <summary aria-label="Menu">&#8942;</summary>
     <div class="menu-body">
@@ -43,7 +43,7 @@
   {% endwith %}
   {% block content %}{% endblock %}
 </main>
-{% if user %}
+{% if user and not kiosk %}
 <footer class="userbar">
   <span class="muted small">{{ user.name }} &middot; {{ roles[user.role] }}</span>
   <span class="userbar-links">
