@@ -4,7 +4,7 @@ A phone-friendly web app for creating **Juniper Mist PSKs** (multi-PSK keys), at
 
 - Sign in, pick an org (if you have more than one), then search for a site.
 - See the site's PSKs: name, SSID, VLAN, single-device keys, and expired keys flagged.
-- **Create a PSK**: name, SSID, a generated passphrase (tap ↻ for another, or type your own), optional VLAN (a number or a site variable such as `{{guest_vlan}}`), an expiry (never, 1/7/30/90 days, or a date) and any number of devices or the first device only.
+- **Create a PSK**: name, SSID, a generated passphrase (tap ↻ for another, or type your own), optional VLAN (a number or a site variable such as `{{guest_vlan}}`), an expiry (never, 1/7/30/90 days, or a date), and any number of devices or **one device** (by MAC address). An optional **email** is saved on the key, and Mist can **email the key** to that person.
 - **Show or share it**: a Wi-Fi QR code that guests scan with their camera, a copy button for the password, and a share button that sends a QR image with the Wi-Fi name and password through Messages, WhatsApp, email and so on.
 - **Delete a PSK**: you type its name to confirm.
 - **Org Level Keys** (admins only) sits at the top of the site list. It works the same way, for org-level keys (Cloud PSKs).

@@ -58,6 +58,19 @@
     sync();
   }
 
+  // One-device keys: show and require the MAC address field.
+  var macField = document.getElementById("mac-field");
+  if (macField) {
+    var macInput = document.getElementById("mac");
+    var syncMac = function () {
+      var single = !!document.querySelector("input[name=usage][value=single]:checked");
+      macField.hidden = !single;
+      macInput.required = single;
+    };
+    document.querySelectorAll("input[name=usage]").forEach(function (r) { r.addEventListener("change", syncMac); });
+    syncMac();
+  }
+
   // Copy to clipboard (falls back to selecting the text on plain HTTP).
   function copyText(text, btn) {
     var done = function () { var t = btn.textContent; btn.textContent = "Copied"; setTimeout(function () { btn.textContent = t; }, 1500); };

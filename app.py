@@ -37,7 +37,7 @@ import users as userlib
 from mpsk_core import MpskError
 from users import GUEST_PSK_ROLE, KEY_EXPIRY, ROLES, SELF_SERVICE_PSK_ROLE, UserError, UserStore
 
-__version__ = "1.3.0"
+__version__ = "1.4.0"
 
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_WEB_CONF = BASE_DIR / "web.conf"
@@ -530,7 +530,7 @@ def create_app(web_conf: dict, store: UserStore, config_folder: Path = BASE_DIR,
     def new_key_page(wlans, existing, create, subtitle, back_url, after_url, scope_log):
         u = current_user()
         api = current_api()
-        form = {"usage": "multi"}
+        form = {"usage": "multi", "notify": "1"}
         usable = [w for w in wlans if w["usable"]]
         fixed_ssid = u.get("ssid") if is_guest(u) else None
         if fixed_ssid and fixed_ssid not in {w["ssid"] for w in usable}:
@@ -559,6 +559,7 @@ def create_app(web_conf: dict, store: UserStore, config_folder: Path = BASE_DIR,
                 else:
                     activity("created", config=api.cfg.name, **scope_log, psk=body["name"], ssid=body["ssid"],
                              vlan=body.get("vlan_id"), usage=body["usage"], psk_role=body.get("role"),
+                             email=body.get("email"), emailed="yes" if body.get("notify_on_create_or_edit") else None,
                              expires=fmt_expiry(body.get("expire_time")) if body.get("expire_time") else None)
                     flash(f"PSK {body['name']} created.", "ok")
                     return redirect(after_url(created["id"]))
@@ -842,7 +843,6 @@ def create_app(web_conf: dict, store: UserStore, config_folder: Path = BASE_DIR,
 
     # -- self-service kiosk ----------------------------------------------
 
-    EMAIL_RE = __import__("re").compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
     @app.route("/kiosk", methods=["GET", "POST"])
     def kiosk():
@@ -863,7 +863,7 @@ def create_app(web_conf: dict, store: UserStore, config_folder: Path = BASE_DIR,
                 problems.append("Please enter your name.")
             if not form["company"]:
                 problems.append("Please enter your company.")
-            if not EMAIL_RE.match(form["email"]) or len(form["email"]) > 120:
+            if not core.EMAIL_RE.match(form["email"]) or len(form["email"]) > 120:
                 problems.append("Please enter a valid email address.")
             if len(form["visitor"]) > 40 or len(form["company"]) > 40:
                 problems.append("Please keep your name and company to 40 characters each.")
@@ -878,9 +878,9 @@ def create_app(web_conf: dict, store: UserStore, config_folder: Path = BASE_DIR,
                     api.cfg, avoid={p.get("passphrase") for p in existing if p.get("ssid") == u["ssid"]})
                 body, problems = core.validate_new_psk(
                     {"name": name, "ssid": u["ssid"], "passphrase": passphrase, "usage": "multi",
-                     "expiry": u.get("key_expiry") or ""}, [wlan], existing, role=SELF_SERVICE_PSK_ROLE)
+                     "expiry": u.get("key_expiry") or "", "email": form["email"], "notify": "1"},
+                    [wlan], existing, role=SELF_SERVICE_PSK_ROLE)
                 if not problems:
-                    body["email"] = form["email"]
                     try:
                         api.create_psk(u["site_id"], body)
                     except MpskError as e:
@@ -888,7 +888,7 @@ def create_app(web_conf: dict, store: UserStore, config_folder: Path = BASE_DIR,
                         problems = ["Sorry, your key couldn't be created. Please ask at reception."]
                     else:
                         activity("kiosk created", config=api.cfg.name, site=site.get("name"), psk=name,
-                                 email=form["email"], ssid=u["ssid"],
+                                 email=form["email"], emailed="yes", ssid=u["ssid"],
                                  expires=fmt_expiry(body.get("expire_time")) if body.get("expire_time") else None)
                         payload = core.wifi_qr_payload(u["ssid"], passphrase, wlan["hidden"])
                         return render_template("kiosk_done.html", site=site, ssid=u["ssid"], passphrase=passphrase,

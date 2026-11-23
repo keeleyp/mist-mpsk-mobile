@@ -1,6 +1,6 @@
 # Mist MPSK Mobile — User Guide
 
-Version 1.3.0
+Version 1.4.0
 
 Mist MPSK Mobile is a small web app for creating **Juniper Mist PSKs**: personal Wi-Fi passwords on a multi-PSK network. Every device or visitor can have their own key, which you can see, share as a QR code and delete. It's built for phones: open it in Safari or Chrome and add it to your home screen.
 
@@ -62,7 +62,7 @@ Site admins skip the list and go straight to their own site.
 
 The site page lists every key at the site:
 
-- the **name**, then the **Wi-Fi network (SSID)**, the **VLAN** (if one is set), *single device* if the key is locked to one device, and the expiry time;
+- the **name**, then the **Wi-Fi network (SSID)**, the **VLAN** (if one is set), *one device* and its MAC address if the key is locked to one device, and the expiry time;
 - an **expired** tag on keys that no longer work;
 - a role tag such as **guest** or **self_service** on keys that guest users or the kiosk created.
 
@@ -72,18 +72,20 @@ A yellow note means the site has a Wi-Fi network this app can't use. For example
 
 ### Create a key
 
-<p class="shots"><img src="images/06-new-key.png" width="230"></p>
+Tap **+ New PSK** and fill in the form:
 
-Tap **+ New PSK**, then:
+<p class="shots"><img src="images/06-new-key.png" width="230"></p>
 
 | Field | What to enter |
 |---|---|
 | **Name** | Who or what the key is for, e.g. *Reception iPad*. Must be unique on that SSID |
+| **Email** | Optional. The address of the person the key is for. It's saved on the key in Mist |
+| **Email the key to this address** | Ticked by default. Mist emails the Wi-Fi name and password to that address when the key is created. It does nothing if Email is blank |
 | **SSID** | The Wi-Fi network the key works on |
 | **Passphrase** | Already generated for you. Tap **↻** for another, or type your own (8–63 characters) |
 | **VLAN** | Optional. A number (1–4094) or a site variable such as `{{guest_vlan}}`. Leave it blank to use the network's normal VLAN |
 | **Expires** | Never, in 1, 7, 30 or 90 days, or **On a date…** |
-| **Devices** | **Any number**, or **First device only** (the key locks to the first device that connects) |
+| **Devices** | **Any number**, or **One device**. For **One device** you must enter the device's **MAC address** (any common format, e.g. `aa:bb:cc:dd:ee:ff`), and only that device can use the key. On phones, use the Wi-Fi MAC the phone uses for *this* network, because private or random addresses are different for each network |
 
 Tap **Create PSK**. The new key opens straight away, ready to share.
 
@@ -146,7 +148,7 @@ Open **Users** from the bottom bar or the **⋮** menu.
 As a guest user, you create keys for visitors:
 
 - You see only **guest keys**, meaning keys that you and other guest users created.
-- Tap **+ New guest key**. The **Wi-Fi** network is fixed by your admin, so you only fill in the name, passphrase, optional VLAN, expiry and devices.
+- Tap **+ New guest key**. The **Wi-Fi** network is fixed by your admin, so you only fill in the name, optional email (Mist can email the key to the visitor), passphrase, optional VLAN, expiry and devices.
 - Every key you create is saved in Mist with the role **guest**.
 - Share keys the same way as in section 2. You can't delete keys, so ask a site admin or admin to remove one.
 
@@ -168,7 +170,7 @@ The kiosk is a phone or tablet at reception, signed in as a **self service** use
 
 The screen also clears itself after **3 minutes**, so a key is never left on show.
 
-Behind the scenes, each visitor gets their own key, named *Name - Company* (repeat visitors get *(2)*, *(3)* and so on). The key has the role **self_service**, the visitor's email is saved on it in Mist, and it expires as set for the kiosk user. Admins and site admins can see these keys in the site's list.
+Behind the scenes, each visitor gets their own key, named *Name - Company* (repeat visitors get *(2)*, *(3)* and so on). The key has the role **self_service**, the visitor's email is saved on it, **Mist emails the key to the visitor**, and it expires as set for the kiosk user. Admins and site admins can see these keys in the site's list.
 
 ### Staff: setting up and signing out the kiosk
 
@@ -186,7 +188,8 @@ Behind the scenes, each visitor gets their own key, named *Name - Company* (repe
 |---|---|
 | "This form has expired" | Go back, reload the page and try again. This happens after the app has been restarted or your session has ended |
 | "No SSID at this site can use site PSKs" | The site needs a WPA2/WPA3 Personal network with **local** multiple passphrases. Ask your Mist admin |
-| A key doesn't connect | Check that the phone is joining the **same SSID** the key is for, and that the key hasn't **expired** |
+| A key doesn't connect | Check that the phone is joining the **same SSID** the key is for, and that the key hasn't **expired**. For a **One device** key, check the MAC address: the phone may use a private (random) address on this network |
+| The email didn't arrive | Check the address on the key's page, and the visitor's spam folder. Mist sends the email, not this app |
 | Locked out after wrong passwords | Wait 15 minutes, or ask an admin to **Reset password** |
 | Can't reach the app | Make sure you're on the office Wi-Fi or VPN |
 

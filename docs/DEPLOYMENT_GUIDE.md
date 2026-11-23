@@ -1,6 +1,6 @@
 # Mist MPSK Mobile — Deployment Guide
 
-Version 1.3.0
+Version 1.4.0
 
 This guide installs Mist MPSK Mobile on a **Raspberry Pi** (or any Debian or Ubuntu machine), connects it to one or more Mist orgs, runs it as a service and sets up the first users. Allow about 20 minutes.
 
@@ -101,7 +101,7 @@ You should see:
 
 ```
 Created user admin (admin, password 'admin', must be changed at first sign-in)
-Mist MPSK Mobile 1.3.0: http://0.0.0.0:5040  (1 user(s), configs in /home/pi/mist-mpsk-mobile)
+Mist MPSK Mobile 1.4.0: http://0.0.0.0:5040  (1 user(s), configs in /home/pi/mist-mpsk-mobile)
 ```
 
 On your phone, browse to `http://<pi-address>:5040`, sign in as **admin / admin** and **choose a new password straight away**. Then press **Ctrl+C** on the Pi to stop the app, and set it up as a service (next section).

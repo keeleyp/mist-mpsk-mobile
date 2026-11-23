@@ -26,6 +26,13 @@ QR_SPECIAL_CHARS = set('\\;,:"')
 # Leaves out look-alikes (0 O 1 l I) and QR-escaped characters (\ ; , : ").
 DEFAULT_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!#$%&*+-=?@"
 DEFAULT_LENGTH = 12
+def normalise_mac(raw: str) -> str | None:
+    """aa:bb:cc:dd:ee:ff / AA-BB-.. / aabb.ccdd.eeff / aabbccddeeff -> aabbccddeeff (Mist's format)."""
+    mac = re.sub(r"[\s:.\-]", "", raw or "").lower()
+    return mac if re.fullmatch(r"[0-9a-f]{12}", mac) else None
+
+
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 VLAN_VAR_RE = re.compile(r"^\{\{\s*[A-Za-z_][A-Za-z0-9_]*\s*\}\}$")
 
 
@@ -358,6 +365,8 @@ def validate_new_psk(form: dict, wlans: list, existing: list, role: str | None =
     passphrase = form.get("passphrase") or ""
     vlan_raw = (form.get("vlan") or "").strip()
     usage = form.get("usage") or "multi"
+    email = (form.get("email") or "").strip()
+    notify = str(form.get("notify", "")).lower() in ("1", "on", "true", "yes")
     expiry = (form.get("expiry") or "").strip()     # "", "1d", "7d", "30d", "90d" or YYYY-MM-DD
 
     if not name:
@@ -378,12 +387,31 @@ def validate_new_psk(form: dict, wlans: list, existing: list, role: str | None =
         problems.append(f"There is already a PSK called {name!r} on {ssid} at this site.")
     if passphrase and any(p.get("passphrase") == passphrase and p.get("ssid") == ssid for p in existing):
         problems.append("Another PSK on this SSID already uses that passphrase - generate a new one.")
+    if email and (not EMAIL_RE.match(email) or len(email) > 120):
+        problems.append("That email address doesn't look right.")
+    mac = None
     if usage not in ("multi", "single"):
         problems.append("Usage must be multi or single.")
+    elif usage == "single":
+        raw_mac = (form.get("mac") or "").strip()
+        mac = normalise_mac(raw_mac)
+        if not raw_mac:
+            problems.append("A single-device key needs the device's MAC address.")
+        elif not mac:
+            problems.append("That MAC address doesn't look right - use 12 hex digits, e.g. aa:bb:cc:dd:ee:ff.")
+        elif mac == "000000000000" or int(mac[:2], 16) & 1:
+            problems.append("That isn't a device MAC address (it's blank or multicast).")
 
     body = {"name": name, "ssid": ssid, "passphrase": passphrase, "usage": usage}
+    if mac:
+        body["mac"] = mac
     if role:
         body["role"] = role
+    if email:
+        body["email"] = email
+        if notify:
+            # Mist emails the key to this address when it's created
+            body["notify_on_create_or_edit"] = True
     if vlan_raw:
         if vlan_raw.isdigit() and 1 <= int(vlan_raw) <= 4094:
             body["vlan_id"] = int(vlan_raw)

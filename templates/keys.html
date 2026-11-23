@@ -25,7 +25,7 @@
   <a class="row" href="{{ p._url }}" data-text="{{ (p.name ~ ' ' ~ p.ssid ~ ' ' ~ vlan_text(p) ~ ' ' ~ (p.role or ''))|lower }}">
     <span class="row-main">
       <span class="row-title">{{ p.name }}{% if p.role and not guest_view %} <span class="tag">{{ p.role }}</span>{% endif %}{% if expired %} <span class="tag err">expired</span>{% endif %}</span>
-      <span class="row-sub">{{ p.ssid }}{% if vlan_text(p) %} &middot; VLAN {{ vlan_text(p) }}{% endif %}{% if p.usage == 'single' %} &middot; single device{% endif %}{% if p.expire_time and not expired %} &middot; until {{ fmt_expiry(p.expire_time) }}{% endif %}</span>
+      <span class="row-sub">{{ p.ssid }}{% if vlan_text(p) %} &middot; VLAN {{ vlan_text(p) }}{% endif %}{% if p.usage == 'single' %} &middot; one device{% if p.mac %} {{ p.mac }}{% endif %}{% endif %}{% if p.expire_time and not expired %} &middot; until {{ fmt_expiry(p.expire_time) }}{% endif %}</span>
     </span>
     <span class="chev">&rsaquo;</span>
   </a>

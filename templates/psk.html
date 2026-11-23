@@ -26,9 +26,10 @@
 <div class="card">
   <div class="kv">
     <div><span class="k">{{ 'Scope' if 'org level' in scope_name else 'Site' }}</span><span class="v">{{ scope_name }}</span></div>
+    {% if psk.email %}<div><span class="k">Email</span><span class="v">{{ psk.email }}</span></div>{% endif %}
     {% if psk.role %}<div><span class="k">Role</span><span class="v">{{ psk.role }}</span></div>{% endif %}
     <div><span class="k">VLAN</span><span class="v">{{ vlan_text(psk) or 'WLAN default' }}</span></div>
-    <div><span class="k">Devices</span><span class="v">{{ 'First device only' if psk.usage == 'single' else 'Any number' }}{% if psk.mac %} ({{ psk.mac }}){% endif %}</span></div>
+    <div><span class="k">Devices</span><span class="v">{{ 'One device' if psk.usage == 'single' else 'Any number' }}{% if psk.mac %} <span class="mono">{{ psk.mac }}</span>{% endif %}</span></div>
     <div><span class="k">Expires</span><span class="v">{{ fmt_expiry(psk.expire_time) }}</span></div>
     {% if psk.created_time %}<div><span class="k">Created</span><span class="v">{{ fmt_expiry(psk.created_time) }}</span></div>{% endif %}
   </div>

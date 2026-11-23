@@ -5,7 +5,7 @@
 <div class="hero">
   <img src="{{ url_for('static', filename='icons/icon-192.png') }}" alt="" width="64" height="64">
   <h1>{% if company %}Welcome to {{ company }}{% else %}Get Wi-Fi access{% endif %}</h1>
-  <p class="muted">Enter your details to get your own Wi-Fi password.</p>
+  <p class="muted">Enter your details to get your own Wi-Fi password. We'll email it to you too.</p>
 </div>
 {% if unavailable %}
 <div class="flash warn">Wi-Fi sign-up isn't available right now. Please ask at reception.</div>

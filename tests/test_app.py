@@ -72,6 +72,18 @@ class TestCore(unittest.TestCase):
             {"name": "", "ssid": "Nope", "passphrase": "short", "vlan": "5000", "expiry": "2001-01-01"}, wlans, [])
         self.assertEqual(len(problems), 5)
 
+    def test_single_device_needs_mac(self):
+        wlans = [{"ssid": "Corp", "usable": True, "hidden": False}]
+        form = {"name": "x", "ssid": "Corp", "passphrase": "abcdefgh", "usage": "single"}
+        self.assertIn("needs the device's MAC", core.validate_new_psk(form, wlans, [])[1][0])
+        self.assertIn("doesn't look right", core.validate_new_psk(dict(form, mac="12:34"), wlans, [])[1][0])
+        self.assertIn("multicast", core.validate_new_psk(dict(form, mac="01:00:5e:00:00:01"), wlans, [])[1][0])
+        for raw in ("AA:BB:CC:DD:EE:F0", "aa-bb-cc-dd-ee-f0", "aabb.ccdd.eef0", "aabbccddeef0"):
+            body, problems = core.validate_new_psk(dict(form, mac=raw), wlans, [])
+            self.assertEqual((problems, body["mac"]), ([], "aabbccddeef0"))
+        body, _ = core.validate_new_psk(dict(form, usage="multi", mac="aa:bb:cc:dd:ee:f0"), wlans, [])
+        self.assertNotIn("mac", body)          # ignored for multi-device keys
+
     def test_png(self):
         png = core.qr_card_png(core.wifi_qr_payload("S", "P" * 12, False), "S", "P" * 12, "Site - Name")
         self.assertTrue(png.startswith(b"\x89PNG"))
@@ -144,11 +156,15 @@ class TestAdmin(Base):
         self.login()
         r = self.c.post("/site/s1/new", data={"csrf": self.csrf, "name": "Till 4", "ssid": "Corp-PSK",
                                               "passphrase": "GoodKey12345", "vlan": "120", "expiry": "date",
-                                              "expiry_date": "2099-12-31", "usage": "multi"})
+                                              "expiry_date": "2099-12-31", "usage": "multi",
+                                              "email": "till4@example.com", "notify": "1"})
         self.assertEqual(r.status_code, 302, r.data[:500])
         created = self.fake.psks["s1"][-1]
         self.assertEqual(created["vlan_id"], 120)
         self.assertNotIn("role", created)
+        self.assertEqual(created["email"], "till4@example.com")
+        self.assertIs(created["notify_on_create_or_edit"], True)
+        self.assertIn(b"till4@example.com", self.c.get(f"/site/s1/psk/{created['id']}").data)
         self.assertIn(b"<svg", self.c.get(r.headers["Location"]).data)
         self.assertEqual(self.c.get(f"/site/s1/psk/{created['id']}/qr.png").mimetype, "image/png")
         self.c.post(f"/site/s1/psk/{created['id']}/delete", data={"csrf": self.csrf, "confirm_name": "nope"})
@@ -268,10 +284,15 @@ class TestGuest(Base):
         self.assertNotIn(b'name="ssid"', form)
         self.assertIn(b"Corp-PSK", form)
         r = self.c.post("/site/s1/new", data={"csrf": self.csrf, "name": "Visitor Ann", "ssid": "IoT-PSK",
-                                              "passphrase": "AnnKey123456", "usage": "multi"})
+                                              "passphrase": "AnnKey123456", "usage": "multi", "email": "not-an-email"})
+        self.assertIn(b"doesn", r.data)
+        r = self.c.post("/site/s1/new", data={"csrf": self.csrf, "name": "Visitor Ann", "ssid": "IoT-PSK",
+                                              "passphrase": "AnnKey123456", "usage": "multi", "email": "ann@example.com"})
         self.assertEqual(r.status_code, 302)
         self.assertEqual(self.fake.psks["s1"][-1]["role"], "guest")
         self.assertEqual(self.fake.psks["s1"][-1]["ssid"], "Corp-PSK")   # the assigned SSID wins
+        self.assertEqual(self.fake.psks["s1"][-1]["email"], "ann@example.com")
+        self.assertNotIn("notify_on_create_or_edit", self.fake.psks["s1"][-1])   # box not ticked
         self.assertEqual(self.c.get("/site/s2").status_code, 403)
         self.assertEqual(self.c.get("/org").status_code, 403)
         self.assertEqual(self.c.get("/users").status_code, 403)
@@ -311,6 +332,7 @@ class TestSelfService(Base):
         keys = [p for p in self.fake.psks["s1"] if p.get("role") == "self_service"]
         self.assertEqual([k["name"] for k in keys], ["Ann Lee - Acme", "Ann Lee - Acme (2)"])
         self.assertEqual(keys[0]["email"], "ann@example.com")
+        self.assertIs(keys[0]["notify_on_create_or_edit"], True)
         self.assertEqual(keys[0]["ssid"], "Corp-PSK")
         self.assertIn("expire_time", keys[0])
         self.assertIn(keys[1]["passphrase"].encode(), r.data)

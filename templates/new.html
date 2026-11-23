@@ -11,6 +11,12 @@
     <input name="name" value="{{ form.name or '' }}" maxlength="64" required placeholder="e.g. Reception iPad"
            autocomplete="off">
   </label>
+  <label>Email <span class="muted">(optional)</span>
+    <input name="email" type="email" value="{{ form.email or '' }}" maxlength="120" autocomplete="off"
+           autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="email" placeholder="Who the key is for">
+  </label>
+  <label class="check"><input type="checkbox" name="notify" value="1" {% if form.notify %}checked{% endif %}>
+    <span>Email the key to this address<span class="hint">Mist sends the Wi-Fi name and password when the key is created.</span></span></label>
   {% if fixed_ssid %}
   <div class="fixed-field"><span class="muted">Wi-Fi</span> <b>{{ fixed_ssid }}</b></div>
   {% else %}
@@ -52,8 +58,14 @@
   <fieldset class="seg">
     <legend>Devices</legend>
     <label><input type="radio" name="usage" value="multi" {% if form.usage != 'single' %}checked{% endif %}> Any number</label>
-    <label><input type="radio" name="usage" value="single" {% if form.usage == 'single' %}checked{% endif %}> First device only</label>
+    <label><input type="radio" name="usage" value="single" {% if form.usage == 'single' %}checked{% endif %}> One device</label>
   </fieldset>
+  <label id="mac-field" {% if form.usage != 'single' %}hidden{% endif %}>Device MAC address
+    <input name="mac" id="mac" value="{{ form.mac or '' }}" maxlength="17" class="mono" placeholder="aa:bb:cc:dd:ee:ff"
+           autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
+    <span class="hint">Only this device can use the key. On phones, use the Wi-Fi MAC for this network
+      (private / random addresses change per network).</span>
+  </label>
   <button class="primary block">Create PSK</button>
 </form>
 {% endblock %}
