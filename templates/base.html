@@ -17,7 +17,7 @@
 <body>
 <header class="topbar">
   {% block back %}<span class="back-spacer"></span>{% endblock %}
-  <div class="title">{% block heading %}MPSK{% endblock %}</div>
+  <div class="title">{% if company %}<div class="company">{{ company }}</div>{% endif %}<div class="heading">{% block heading %}MPSK{% endblock %}</div></div>
   {% if user and not kiosk %}
   <details class="menu">
     <summary aria-label="Menu">&#8942;</summary>

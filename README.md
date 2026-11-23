@@ -131,7 +131,7 @@ Phones only trust a self-signed certificate after you install it:
 | | `org_id` | Org ID |
 | `[psk]` | `allowed_characters` | Characters generated keys use (default leaves out look-alikes and QR-escaped characters) |
 | | `length` | Generated key length, 8–63 (default 12) |
-| `[app]` | `name` | Label shown in the app (default: the org name) |
+| `[app]` | `company` | Company name shown at the top of every page, on the kiosk welcome ("Welcome to …") and on shared QR images (default: the Mist org name) |
 | | `ssids` | Comma-separated SSIDs to offer (default: all eligible) |
 | `[network]` | `ca_bundle`, `verify_ssl`, `http_proxy`, `https_proxy` | Only needed behind Zscaler or another TLS-inspecting proxy |
 

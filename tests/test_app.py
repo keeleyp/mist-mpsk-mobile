@@ -299,7 +299,7 @@ class TestSelfService(Base):
         self.assertTrue(self.c.get("/site/s1").headers["Location"].endswith("/kiosk"))
         self.assertTrue(self.c.get("/users").headers["Location"].endswith("/kiosk"))
         r = self.c.get("/kiosk")
-        self.assertIn(b"Get Wi-Fi access", r.data)
+        self.assertIn(b"Welcome to Acme Retail", r.data)       # no [app] company: Mist org name
         self.assertNotIn(b"Sign out</button>", r.data)       # no plain sign-out
         r = self.c.post("/kiosk", data={"csrf": self.csrf, "visitor": "Ann Lee", "company": "Acme", "email": "bad"})
         self.assertIn(b"valid email", r.data)
@@ -339,7 +339,7 @@ class TestSelfService(Base):
 
 
 class TestSsidAllowList(Base):
-    extra_config = "\n[app]\nssids = IoT-PSK\nname = Acme Test\n"
+    extra_config = "\n[app]\nssids = IoT-PSK\ncompany = Acme Test Ltd\n"
 
     def test_only_listed(self):
         self.login()
@@ -347,7 +347,8 @@ class TestSsidAllowList(Base):
         self.assertIn(b"Old Printer", r.data)
         self.assertNotIn(b"Reception iPad", r.data)
         self.assertEqual(self.c.get("/site/s1/psk/p1").status_code, 404)
-        self.assertIn(b"Acme Test", self.c.get("/").data)
+        self.assertIn(b'<div class="company">Acme Test Ltd</div>', self.c.get("/site/s1").data)
+        self.assertIn(b"Acme Test Ltd", self.c.get("/").data)
 
 
 class TestWebConf(unittest.TestCase):

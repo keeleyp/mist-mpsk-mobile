@@ -4,7 +4,7 @@
 {% block content %}
 <div class="hero">
   <img src="{{ url_for('static', filename='icons/icon-192.png') }}" alt="" width="64" height="64">
-  <h1>Get Wi-Fi access</h1>
+  <h1>{% if company %}Welcome to {{ company }}{% else %}Get Wi-Fi access{% endif %}</h1>
   <p class="muted">Enter your details to get your own Wi-Fi password.</p>
 </div>
 {% if unavailable %}

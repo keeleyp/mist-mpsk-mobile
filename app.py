@@ -37,7 +37,7 @@ import users as userlib
 from mpsk_core import MpskError
 from users import GUEST_PSK_ROLE, KEY_EXPIRY, ROLES, SELF_SERVICE_PSK_ROLE, UserError, UserStore
 
-__version__ = "1.2.1"
+__version__ = "1.3.0"
 
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_WEB_CONF = BASE_DIR / "web.conf"
@@ -273,7 +273,10 @@ def create_app(web_conf: dict, store: UserStore, config_folder: Path = BASE_DIR,
                 name = session["config"] = next(iter(configs))
             else:
                 abort(redirect(url_for("configs")))
-        return core.Mist(core.load_config(configs[name]))
+        api = core.Mist(core.load_config(configs[name]))
+        if not api.cfg.label:
+            org_name(api)      # cached hourly; the header shows it when [app] company isn't set
+        return api
 
     def org_name(api: core.Mist) -> str:
         key = (api.cfg.name, api.cfg.org_id)
@@ -314,6 +317,20 @@ def create_app(web_conf: dict, store: UserStore, config_folder: Path = BASE_DIR,
     def visible(u, psks):
         return psks if can_manage_keys(u) else [p for p in psks if p.get("role") == GUEST_PSK_ROLE]
 
+    def company_name(u) -> str:
+        """[app] company from the user's current config, else the Mist org name
+        if it's already cached (never calls Mist just for the header)."""
+        configs = user_configs(u)
+        name = session.get("config") if session.get("config") in configs else (
+            next(iter(configs)) if len(configs) == 1 else None)
+        if not name:
+            return ""
+        try:
+            cfg = core.load_config(configs[name])
+        except MpskError:
+            return ""
+        return cfg.label or org_cache.get((cfg.name, cfg.org_id)) or ""
+
     @app.context_processor
     def inject_globals():
         u = current_user()
@@ -321,7 +338,7 @@ def create_app(web_conf: dict, store: UserStore, config_folder: Path = BASE_DIR,
                "key_expiry_choices": KEY_EXPIRY, "kiosk": bool(u and u["role"] == "self_service"),
                "fmt_expiry": fmt_expiry, "vlan_text": vlan_text}
         if u:
-            ctx.update(config_name=session.get("config"), config_count=len(user_configs(u)),
+            ctx.update(config_name=session.get("config"), config_count=len(user_configs(u)), company=company_name(u),
                        is_admin=is_admin(u), can_manage_keys=can_manage_keys(u),
                        can_manage_users=can_manage_users(u))
         return ctx
@@ -594,8 +611,11 @@ def create_app(web_conf: dict, store: UserStore, config_folder: Path = BASE_DIR,
 
     def png_response(api, scope_name, p, hidden, scope_log):
         payload = core.wifi_qr_payload(p.get("ssid", ""), p.get("passphrase", ""), hidden)
-        png = core.qr_card_png(payload, p.get("ssid", ""), p.get("passphrase", ""),
-                               f"{scope_name} - {p.get('name', '')}")
+        company = org_name(api)
+        title = f"{scope_name} - {p.get('name', '')}"
+        if company and company not in scope_name:
+            title = f"{company} - {title}"
+        png = core.qr_card_png(payload, p.get("ssid", ""), p.get("passphrase", ""), title)
         activity("shared image", config=api.cfg.name, **scope_log, psk=p.get("name"))
         safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in p.get("name", "psk"))[:40]
         return Response(png, mimetype="image/png",

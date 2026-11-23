@@ -7,7 +7,7 @@ and [pdf] sections are ignored). One extra, optional section:
 
     [app]
     ssids = Corp-PSK, IoT-PSK     ; only offer these SSIDs (default: every eligible one)
-    name = Customer A             ; label shown in the app (default: the org name)
+    company = Customer A          ; company name shown in the app (default: the Mist org name)
 """
 
 import configparser
@@ -40,7 +40,7 @@ class MpskError(Exception):
 @dataclass
 class Config:
     name: str            # file name, e.g. customer-a.ini
-    label: str           # [app] name, or "" (then the org name is used)
+    label: str           # [app] company (or name), or "" (then the Mist org name is used)
     base_url: str
     api_token: str
     org_id: str
@@ -113,7 +113,8 @@ def load_config(path: Path) -> Config:
     cloud = get("mist", "cloud")
     alphabet_raw = get("psk", "allowed_characters", DEFAULT_ALPHABET)
     length_raw = get("psk", "length", str(DEFAULT_LENGTH))
-    label = get("app", "name", "")
+    # [app] company is shown in the app instead of the Mist org name ([app] name is the old spelling)
+    label = get("app", "company", "") or get("app", "name", "")
     ssids = [s.strip() for s in get("app", "ssids", "").split(",") if s.strip()]
 
     alphabet = "".join(dict.fromkeys(alphabet_raw))

@@ -20,8 +20,9 @@ length = 12
 
 ; Optional.
 ;[app]
-; Name shown at the top of the site list (default: the org's name in Mist).
-;name = Customer A
+; Company name shown at the top of every page, on the kiosk welcome and on
+; shared QR images (default: the org's name in Mist).
+;company = Customer A Ltd
 ; Only offer these SSIDs (comma-separated). Default: every SSID that can use site PSKs.
 ;ssids = Corp-PSK, IoT-PSK
 

@@ -132,3 +132,6 @@ button.link.danger { color: var(--danger); }
 .kiosk-kv { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 0 12px; }
 .kiosk-kv > div { padding: 7px 0; }
 .kiosk-note { margin: 0; }
+.topbar .title { line-height: 1.2; }
+.topbar .title .company { font-size: 12px; font-weight: 500; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topbar .title .heading { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
