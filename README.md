@@ -10,6 +10,8 @@ A phone-friendly web app for creating **Juniper Mist PSKs** (multi-PSK keys), at
 - **Org Level Keys** (admins only) sits at the top of the site list. It works the same way, for org-level keys (Cloud PSKs).
 - **App users with roles**: admin, site admin and guest (see below). Admins add users in the app. Every sign-in, create, view, share, delete and user change goes to an activity log. Passwords and passphrases are never logged.
 
+**Guides:** [User Guide](docs/USER_GUIDE.md) ([PDF](docs/USER_GUIDE.pdf)) · [Deployment Guide](docs/DEPLOYMENT_GUIDE.md) ([PDF](docs/DEPLOYMENT_GUIDE.pdf))
+
 Configs use the same `.ini` format as [mist-mpsk-generator](https://github.com/keeleyp/mist-mpsk-generator), so an existing `mist_mpsk_generator.ini` works without changes.
 
 ## Users and roles
