@@ -34,6 +34,12 @@ class FakeMist:
                     "passphrase": "Zz9Zz9Zz9", "usage": "single", "expire_time": now - 3600}],
             "s2": [], "s3": [],
         }
+        self.psks["s1"].append({"id": "p3", "site_id": "s1", "name": "Visitor Bob", "ssid": "Corp-PSK",
+                                "passphrase": "GuestKey77", "usage": "multi", "role": "guest"})
+        self.org_wlans = [dict(psk, ssid="Cloud-Keys", dynamic_psk={"enabled": True, "source": "cloud_psks"}),
+                          dict(psk, ssid="Corp-PSK")]
+        self.org_psks = [{"id": "o1", "org_id": ORG_ID, "name": "Exec Laptop", "ssid": "Cloud-Keys",
+                          "passphrase": "OrgWide123", "usage": "multi"}]
 
     def request(self, api, method, path, **kwargs):
         self.calls.append((method, path))
@@ -41,6 +47,23 @@ class FakeMist:
             return {"id": ORG_ID, "name": "Acme Retail"}
         if path == f"/orgs/{ORG_ID}/sites":
             return [s for s in self.sites.values() if s["org_id"] == ORG_ID]
+        if path == f"/orgs/{ORG_ID}/wlans":
+            return list(self.org_wlans)
+        if path == f"/orgs/{ORG_ID}/psks" and method == "GET":
+            return list(self.org_psks)
+        if path == f"/orgs/{ORG_ID}/psks" and method == "POST":
+            body = dict(kwargs["json"], id=str(uuid.uuid4()), org_id=ORG_ID, created_time=int(time.time()))
+            self.org_psks.append(body)
+            return body
+        m = re.fullmatch(rf"/orgs/{ORG_ID}/psks/([^/]+)", path)
+        if m:
+            for p in self.org_psks:
+                if p["id"] == m.group(1):
+                    if method == "DELETE":
+                        self.org_psks.remove(p)
+                        return {}
+                    return p
+            raise core.MpskError(f"Mist API {method} {path} returned HTTP 404")
         m = re.fullmatch(r"/sites/([^/]+)(/.*)?", path)
         if not m or m.group(1) not in self.sites:
             raise core.MpskError(f"Mist API {method} {path} returned HTTP 404")

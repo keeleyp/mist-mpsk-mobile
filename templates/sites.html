@@ -2,6 +2,11 @@
 {% block title %}Sites - MPSK{% endblock %}
 {% block heading %}{{ org_name }}{% endblock %}
 {% block content %}
+{% if show_org_keys %}
+<div class="list" data-hide-when-filtering>
+  <a class="row org-row" href="{{ url_for('org_keys') }}"><span class="row-main"><span class="row-title">Org Level Keys</span><span class="row-sub">Cloud PSKs that work at every site</span></span><span class="chev">&rsaquo;</span></a>
+</div>
+{% endif %}
 <input type="search" class="search" placeholder="Search {{ sites|length }} site{{ '' if sites|length == 1 else 's' }}"
        data-filter="#sites" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
 {% if recent %}

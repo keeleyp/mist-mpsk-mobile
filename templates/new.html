@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 {% block title %}New PSK - MPSK{% endblock %}
-{% block back %}<a class="back" href="{{ url_for('site', site_id=site.id) }}" aria-label="Back">&lsaquo;</a>{% endblock %}
+{% block back %}<a class="back" href="{{ back_url }}" aria-label="Back">&lsaquo;</a>{% endblock %}
 {% block heading %}New PSK{% endblock %}
 {% block content %}
-<p class="muted small center">{{ site.name }}</p>
+<p class="muted small center">{{ subtitle }}{% if guest_key %} &middot; saved with role <b>guest</b>{% endif %}</p>
 {% if problems %}<div class="flash error">{% for p in problems %}<div>{{ p }}</div>{% endfor %}</div>{% endif %}
 <form method="post" class="card" id="new-psk">
   <input type="hidden" name="csrf" value="{{ csrf }}">

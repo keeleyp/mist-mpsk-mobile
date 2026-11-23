@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}User ready - MPSK{% endblock %}
+{% block back %}<a class="back" href="{{ url_for('users_page') }}" aria-label="Back">&lsaquo;</a>{% endblock %}
+{% block heading %}{{ 'Password reset' if reset else 'User added' }}{% endblock %}
+{% block content %}
+<div class="flash ok">{{ 'New password set for' if reset else 'Added' }} <b>{{ created.name }}</b>. Pass these details on &mdash; this page is the only time the password is shown.</div>
+<div class="card">
+  <div class="kv">
+    <div><span class="k">User name</span><span class="v mono" id="u-name">{{ created.name }}</span></div>
+    <div><span class="k">Password</span><span class="v pass"><span class="mono" id="u-pass">{{ password }}</span>
+      <button type="button" class="icon-btn" data-copy="#u-pass">Copy</button></span></div>
+    <div><span class="k">Role</span><span class="v">{{ roles[created.role] }}</span></div>
+    {% if created.role != 'admin' %}<div><span class="k">Site</span><span class="v">{{ created.site_name }}</span></div>{% endif %}
+  </div>
+  <p class="muted small">They'll be asked to choose their own password when they first sign in.</p>
+</div>
+<a class="secondary block" href="{{ url_for('users_page') }}">Back to users</a>
+{% endblock %}

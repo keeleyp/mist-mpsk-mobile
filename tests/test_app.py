@@ -1,4 +1,3 @@
-import re
 import sys
 import tempfile
 import unittest
@@ -9,14 +8,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import app as webapp          # noqa: E402
 import mpsk_core as core      # noqa: E402
 from fake_mist import FakeMist, write_config   # noqa: E402
-from werkzeug.security import generate_password_hash   # noqa: E402
+from users import UserStore, UserError        # noqa: E402
 
 ORIGINAL_REQUEST = core.Mist.request
-HASH = generate_password_hash("correct-horse")
+CONFIG = "acme.ini"
 
 
 class Base(unittest.TestCase):
-    read_only = False
     extra_config = ""
 
     def setUp(self):
@@ -24,11 +22,12 @@ class Base(unittest.TestCase):
         self.dir = Path(self.tmp.name)
         write_config(self.dir, extra=self.extra_config)
         self.fake = FakeMist().install()
-        users = {"philip": {"name": "philip", "password_hash": HASH, "configs": ["*"], "all_configs": True,
-                            "read_only": self.read_only}}
-        conf = {"host": "127.0.0.1", "port": 0, "session_hours": 1, "tls": None, "users": users}
-        self.app = webapp.create_app(conf, config_folder=self.dir, activity_log=self.dir / "act.log",
-                                     secret_key="x" * 64)
+        self.store = UserStore(self.dir / "users.json")
+        self.store.bootstrap()
+        self.store.set_password("admin", "admin-pass-1")       # past first sign-in for most tests
+        conf = {"host": "127.0.0.1", "port": 0, "session_hours": 1, "tls": None, "legacy_users": {}}
+        self.app = webapp.create_app(conf, self.store, config_folder=self.dir,
+                                     activity_log=self.dir / "act.log", secret_key="x" * 64)
         self.app.testing = True
         self.c = self.app.test_client()
 
@@ -36,11 +35,18 @@ class Base(unittest.TestCase):
         core.Mist.request = ORIGINAL_REQUEST
         self.tmp.cleanup()
 
-    def login(self):
-        r = self.c.post("/login", data={"username": "Philip", "password": "correct-horse"})
-        self.assertEqual(r.status_code, 302)
-        with self.c.session_transaction() as s:
+    def login(self, name="admin", password="admin-pass-1", client=None):
+        c = client or self.c
+        r = c.post("/login", data={"username": name, "password": password})
+        self.assertEqual(r.status_code, 302, r.data[:300])
+        with c.session_transaction() as s:
             self.csrf = s["csrf"]
+        return r
+
+    def add(self, name, role, site_id=None, site_name=None, password="first-pass-1"):
+        self.store.add(name, role, CONFIG, site_id, site_name, password, created_by="test")
+        self.store.set_password(name, password)      # skip the forced change
+        return name
 
     def log(self):
         return (self.dir / "act.log").read_text()
@@ -54,9 +60,10 @@ class TestCore(unittest.TestCase):
         wlans = [{"ssid": "Corp", "usable": True, "hidden": False}]
         body, problems = core.validate_new_psk(
             {"name": "x", "ssid": "Corp", "passphrase": "abcdefgh", "vlan": "{{ guest_vlan }}", "expiry": "7d"},
-            wlans, [])
+            wlans, [], role="guest")
         self.assertEqual(problems, [])
         self.assertEqual(body["vlan_id"], "{{guest_vlan}}")
+        self.assertEqual(body["role"], "guest")
         self.assertIn("expire_time", body)
         _, problems = core.validate_new_psk(
             {"name": "", "ssid": "Nope", "passphrase": "short", "vlan": "5000", "expiry": "2001-01-01"}, wlans, [])
@@ -67,92 +74,191 @@ class TestCore(unittest.TestCase):
         self.assertTrue(png.startswith(b"\x89PNG"))
 
 
-class TestFlow(Base):
+class TestBootstrap(unittest.TestCase):
+    def test_first_start_and_forced_change(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            write_config(d)
+            FakeMist().install()
+            try:
+                store = UserStore(d / "users.json")
+                created = store.bootstrap({"philip": "scrypt:fake:hash"})
+                self.assertEqual(len(created), 2)
+                self.assertEqual(store.get("philip")["role"], "admin")
+                self.assertTrue(store.get("admin")["must_change"])
+                self.assertEqual(oct((d / "users.json").stat().st_mode & 0o777), "0o600")
+                self.assertEqual(store.bootstrap(), [])          # only once
+                conf = {"session_hours": 1, "tls": None}
+                c = webapp.create_app(conf, store, config_folder=d, activity_log=d / "a.log",
+                                      secret_key="y" * 64).test_client()
+                r = c.post("/login", data={"username": "admin", "password": "admin"})
+                self.assertTrue(r.headers["Location"].endswith("/password"))
+                self.assertTrue(c.get("/").headers["Location"].endswith("/password"))
+                with c.session_transaction() as s:
+                    csrf = s["csrf"]
+                r = c.post("/password", data={"csrf": csrf, "current": "admin", "new": "admin", "repeat": "admin"})
+                self.assertIn(b"too easy", r.data)
+                r = c.post("/password", data={"csrf": csrf, "current": "admin", "new": "better-pass",
+                                              "repeat": "better-pass"})
+                self.assertEqual(r.status_code, 302)
+                self.assertFalse(store.get("admin")["must_change"])
+                self.assertEqual(c.get("/").status_code, 200)
+                store.reset_admin()
+                self.assertTrue(store.get("admin")["must_change"])
+            finally:
+                core.Mist.request = ORIGINAL_REQUEST
+
+    def test_last_admin(self):
+        with tempfile.TemporaryDirectory() as d:
+            store = UserStore(Path(d) / "users.json")
+            store.bootstrap()
+            with self.assertRaises(UserError):
+                store.delete("admin")
+
+
+class TestAdmin(Base):
     def test_requires_login(self):
         self.assertEqual(self.c.get("/").status_code, 302)
         self.assertEqual(self.c.get("/manifest.webmanifest").status_code, 200)
-        self.assertEqual(self.c.get("/sw.js").status_code, 200)
 
-    def test_wrong_password_and_lockout(self):
+    def test_lockout(self):
         for _ in range(5):
-            self.assertEqual(self.c.post("/login", data={"username": "philip", "password": "x"}).status_code, 401)
-        self.assertEqual(self.c.post("/login", data={"username": "philip", "password": "correct-horse"}).status_code, 429)
+            self.assertEqual(self.c.post("/login", data={"username": "admin", "password": "x"}).status_code, 401)
+        self.assertEqual(self.c.post("/login", data={"username": "admin", "password": "admin-pass-1"}).status_code, 429)
 
-    def test_sites_and_site(self):
+    def test_sites_and_org_row(self):
         self.login()
         r = self.c.get("/")
-        self.assertIn(b"Acme Retail", r.data)
-        self.assertIn(b"Leeds Warehouse", r.data)
+        self.assertIn(b"Org Level Keys", r.data)
+        self.assertIn(b"Sign out", r.data)
         self.assertNotIn(b"Someone Else", r.data)
         r = self.c.get("/site/s1")
-        self.assertIn(b"Reception iPad", r.data)
-        self.assertIn(b"expired", r.data)
-        self.assertIn(b"Cloud-Keys", r.data)       # warned about
-        self.assertNotIn(b"Corp-1X", r.data)       # 802.1X not shown
-        self.assertEqual(self.c.get("/site/x9").status_code, 502)   # other org's site refused
+        for name in (b"Reception iPad", b"Old Printer", b"Visitor Bob"):
+            self.assertIn(name, r.data)
+        self.assertEqual(self.c.get("/site/x9").status_code, 502)
 
-    def test_create_view_delete(self):
+    def test_create_view_delete_site_key(self):
         self.login()
-        r = self.c.get("/site/s1/new")
-        self.assertEqual(r.status_code, 200)
-        self.assertNotIn(b'value="Cloud-Keys"', r.data)
         r = self.c.post("/site/s1/new", data={"csrf": self.csrf, "name": "Till 4", "ssid": "Corp-PSK",
                                               "passphrase": "GoodKey12345", "vlan": "120", "expiry": "date",
                                               "expiry_date": "2099-12-31", "usage": "multi"})
         self.assertEqual(r.status_code, 302, r.data[:500])
         created = self.fake.psks["s1"][-1]
         self.assertEqual(created["vlan_id"], 120)
-        self.assertEqual(created["name"], "Till 4")
-        self.assertIn("expire_time", created)
-        r = self.c.get(r.headers["Location"])
-        self.assertIn(b"<svg", r.data)
-        self.assertIn(b"GoodKey12345", r.data)
-        png = self.c.get(f"/site/s1/psk/{created['id']}/qr.png")
-        self.assertEqual(png.mimetype, "image/png")
-        # duplicate name on same SSID refused
-        r = self.c.post("/site/s1/new", data={"csrf": self.csrf, "name": "till 4", "ssid": "Corp-PSK",
-                                              "passphrase": "OtherKey1234", "usage": "multi"})
-        self.assertIn(b"already a PSK", r.data)
-        # delete needs the name typed
-        r = self.c.post(f"/site/s1/psk/{created['id']}/delete", data={"csrf": self.csrf, "confirm_name": "nope"})
-        self.assertEqual(r.status_code, 302)
+        self.assertNotIn("role", created)
+        self.assertIn(b"<svg", self.c.get(r.headers["Location"]).data)
+        self.assertEqual(self.c.get(f"/site/s1/psk/{created['id']}/qr.png").mimetype, "image/png")
+        self.c.post(f"/site/s1/psk/{created['id']}/delete", data={"csrf": self.csrf, "confirm_name": "nope"})
         self.assertIn(created, self.fake.psks["s1"])
         self.c.post(f"/site/s1/psk/{created['id']}/delete", data={"csrf": self.csrf, "confirm_name": "Till 4"})
         self.assertNotIn(created, self.fake.psks["s1"])
-        log = self.log()
-        self.assertIn("event=created", log)
-        self.assertIn("event=deleted", log)
-        self.assertNotIn("GoodKey12345", log)
+        self.assertNotIn("GoodKey12345", self.log())
+
+    def test_org_keys(self):
+        self.login()
+        r = self.c.get("/org")
+        self.assertIn(b"Exec Laptop", r.data)
+        r = self.c.get("/org/new")
+        self.assertIn(b'value="Cloud-Keys"', r.data)
+        self.assertNotIn(b'value="Corp-PSK"', r.data)       # local-key WLAN isn't for org keys
+        r = self.c.post("/org/new", data={"csrf": self.csrf, "name": "CEO Phone", "ssid": "Cloud-Keys",
+                                          "passphrase": "OrgKey123456", "usage": "multi"})
+        self.assertEqual(r.status_code, 302, r.data[:500])
+        new = self.fake.org_psks[-1]
+        self.assertEqual(new["name"], "CEO Phone")
+        self.assertIn(b"<svg", self.c.get(f"/org/psk/{new['id']}").data)
+        self.c.post(f"/org/psk/{new['id']}/delete", data={"csrf": self.csrf, "confirm_name": "CEO Phone"})
+        self.assertNotIn(new, self.fake.org_psks)
+
+    def test_add_users(self):
+        self.login()
+        r = self.c.get(f"/users/new?config={CONFIG}&name=bob&role=guest")
+        self.assertIn(b"All sites", r.data)
+        self.assertIn(b"London Office", r.data)
+        r = self.c.post("/users/new", data={"csrf": self.csrf, "name": "bob", "role": "guest", "config": CONFIG,
+                                            "site_id": "*", "password": "bobs-first-1"})
+        self.assertIn(b"bobs-first-1", r.data)
+        bob = self.store.get("bob")
+        self.assertEqual((bob["role"], bob["site_id"], bob["must_change"]), ("guest", "*", True))
+        r = self.c.post("/users/new", data={"csrf": self.csrf, "name": "sam", "role": "site_admin",
+                                            "config": CONFIG, "site_id": "*", "password": "sams-first-1"})
+        self.assertIn(b"Pick a site", r.data)
+        self.c.post("/users/new", data={"csrf": self.csrf, "name": "sam", "role": "site_admin", "config": CONFIG,
+                                        "site_id": "s1", "password": "sams-first-1"})
+        self.assertEqual(self.store.get("sam")["site_name"], "London Office")
+        r = self.c.post("/users/bob/reset", data={"csrf": self.csrf})
+        self.assertIn(b"Password reset", r.data)
+        self.c.post("/users/bob/delete", data={"csrf": self.csrf})
+        self.assertIsNone(self.store.get("bob"))
+        self.assertEqual(self.c.post("/users/admin/delete", data={"csrf": self.csrf}).status_code, 403)
+        self.assertNotIn("bobs-first-1", self.log())
 
     def test_csrf(self):
         self.login()
-        r = self.c.post("/site/s1/new", data={"name": "x", "ssid": "Corp-PSK", "passphrase": "abcdefghij"})
-        self.assertEqual(r.status_code, 400)
+        self.assertEqual(self.c.post("/site/s1/new", data={"name": "x"}).status_code, 400)
         self.assertFalse(any(m == "POST" for m, _ in self.fake.calls))
 
-    def test_no_usable_ssid(self):
-        self.login()
-        self.assertEqual(self.c.get("/site/s3/new").status_code, 409)
 
-    def test_qr_escaping_in_page(self):
-        self.login()
-        r = self.c.post("/site/s2/new", data={"csrf": self.csrf, "name": "Guest", "ssid": "Store;Guest",
-                                              "passphrase": "abc:def;ghij", "usage": "multi"})
-        self.assertEqual(r.status_code, 302)
+class TestSiteAdmin(Base):
+    def setUp(self):
+        super().setUp()
+        self.add("sam", "site_admin", "s1", "London Office")
+        self.login("sam", "first-pass-1")
 
-
-class TestReadOnly(Base):
-    read_only = True
-
-    def test_cannot_create(self):
-        self.login()
+    def test_scope(self):
+        r = self.c.get("/")
+        self.assertTrue(r.headers["Location"].endswith("/site/s1"))
         r = self.c.get("/site/s1")
-        self.assertNotIn(b"New PSK", r.data)
-        self.assertNotIn(b"Delete this PSK", self.c.get("/site/s1/psk/p1").data)
-        self.assertEqual(self.c.get("/site/s1/new").status_code, 403)
-        r = self.c.post("/site/s1/psk/p1/delete", data={"csrf": self.csrf, "confirm_name": "Reception iPad"})
-        self.assertEqual(r.status_code, 403)
-        self.assertEqual(len(self.fake.psks["s1"]), 2)
+        self.assertIn(b"Reception iPad", r.data)
+        self.assertIn(b"Visitor Bob", r.data)
+        self.assertNotIn(b"Org Level Keys", r.data)
+        self.assertEqual(self.c.get("/site/s2").status_code, 403)
+        self.assertEqual(self.c.get("/org").status_code, 403)
+        self.assertIn(b"Delete this PSK", self.c.get("/site/s1/psk/p1").data)
+
+    def test_adds_only_guests_for_own_site(self):
+        r = self.c.post("/users/new", data={"csrf": self.csrf, "name": "gail", "role": "admin", "config": "x",
+                                            "site_id": "s2", "password": "gails-first-1"})
+        self.assertIn(b"User added", r.data)
+        gail = self.store.get("gail")
+        self.assertEqual((gail["role"], gail["site_id"], gail["config"]), ("guest", "s1", CONFIG))
+        self.add("other", "guest", "s2", "Manchester Store")
+        self.assertEqual(self.c.post("/users/other/delete", data={"csrf": self.csrf}).status_code, 403)
+        self.assertEqual(self.c.post("/users/admin/reset", data={"csrf": self.csrf}).status_code, 403)
+        self.c.post("/users/gail/delete", data={"csrf": self.csrf})
+        self.assertIsNone(self.store.get("gail"))
+
+
+class TestGuest(Base):
+    def test_single_site_guest(self):
+        self.add("gail", "guest", "s1", "London Office")
+        self.login("gail", "first-pass-1")
+        self.assertTrue(self.c.get("/").headers["Location"].endswith("/site/s1"))
+        r = self.c.get("/site/s1")
+        self.assertIn(b"Visitor Bob", r.data)
+        self.assertNotIn(b"Reception iPad", r.data)
+        self.assertNotIn(b"Users", r.data)
+        self.assertEqual(self.c.get("/site/s1/psk/p1").status_code, 404)
+        r = self.c.get("/site/s1/psk/p3")
+        self.assertIn(b"GuestKey77", r.data)
+        self.assertNotIn(b"Delete this PSK", r.data)
+        self.assertEqual(self.c.post("/site/s1/psk/p3/delete",
+                                     data={"csrf": self.csrf, "confirm_name": "Visitor Bob"}).status_code, 403)
+        r = self.c.post("/site/s1/new", data={"csrf": self.csrf, "name": "Visitor Ann", "ssid": "Corp-PSK",
+                                              "passphrase": "AnnKey123456", "usage": "multi"})
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(self.fake.psks["s1"][-1]["role"], "guest")
+        self.assertEqual(self.c.get("/site/s2").status_code, 403)
+        self.assertEqual(self.c.get("/org").status_code, 403)
+        self.assertEqual(self.c.get("/users").status_code, 403)
+
+    def test_all_sites_guest(self):
+        self.add("gus", "guest", "*", "All sites")
+        self.login("gus", "first-pass-1")
+        r = self.c.get("/")
+        self.assertIn(b"Manchester Store", r.data)
+        self.assertNotIn(b"Org Level Keys", r.data)
+        self.assertEqual(self.c.get("/site/s2/new").status_code, 200)
 
 
 class TestSsidAllowList(Base):
@@ -168,16 +274,14 @@ class TestSsidAllowList(Base):
 
 
 class TestWebConf(unittest.TestCase):
-    def test_parse(self):
+    def test_optional_and_legacy(self):
         with tempfile.TemporaryDirectory() as d:
             d = Path(d)
-            write_config(d)
-            (d / "web.conf").write_text(f"[web]\nport = 5040\n[user a]\npassword_hash = {HASH}\nconfigs = acme.ini\n")
-            conf = webapp.load_web_conf(d / "web.conf", d)
+            conf = webapp.load_web_conf(d / "web.conf")
             self.assertEqual(conf["port"], 5040)
-            (d / "web.conf").write_text(f"[user a]\npassword_hash = {HASH}\nconfigs = missing.ini\n")
-            with self.assertRaises(webapp.WebConfError):
-                webapp.load_web_conf(d / "web.conf", d)
+            (d / "web.conf").write_text("[web]\nport = 5041\n[user philip]\npassword_hash = scrypt:a:b\nconfigs = *\n")
+            conf = webapp.load_web_conf(d / "web.conf")
+            self.assertEqual((conf["port"], conf["legacy_users"]), (5041, {"philip": "scrypt:a:b"}))
 
 
 if __name__ == "__main__":

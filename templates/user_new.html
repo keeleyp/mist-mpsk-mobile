@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Add user - MPSK{% endblock %}
+{% block back %}<a class="back" href="{{ url_for('users_page') }}" aria-label="Back">&lsaquo;</a>{% endblock %}
+{% block heading %}Add {{ 'guest user' if fixed else 'user' }}{% endblock %}
+{% block content %}
+{% if problems %}<div class="flash error">{% for p in problems %}<div>{{ p }}</div>{% endfor %}</div>{% endif %}
+<form method="post" class="card" id="user-form" action="{{ url_for('new_user') }}">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label>User name
+    <input name="name" value="{{ form.name or '' }}" maxlength="40" required autocomplete="off"
+           autocapitalize="none" autocorrect="off" spellcheck="false">
+    <span class="hint">Letters, numbers and . _ - @ only.</span>
+  </label>
+  {% if fixed %}
+  <p class="small">Role: <b>Guest</b> at <b>{{ fixed.site_name }}</b>. Guests can create guest keys and see only guest keys.</p>
+  {% else %}
+  <fieldset class="seg roles">
+    <legend>Role</legend>
+    {% for key, label in roles.items() %}
+    <label><input type="radio" name="role" value="{{ key }}" {% if form.role == key %}checked{% endif %}> {{ label }}</label>
+    {% endfor %}
+    <span class="hint" data-role-hint="admin">Every org and site, org-level keys, and manages all users.</span>
+    <span class="hint" data-role-hint="site_admin">Full key management at one site, and can add guest users for it.</span>
+    <span class="hint" data-role-hint="guest">Creates guest keys and sees only guest keys, at one site or all sites.</span>
+  </fieldset>
+  <div data-scope>
+    {% if configs|length > 1 %}
+    <label>Org
+      <select name="config" data-reload-on-change>
+        {% if not form.config %}<option value="" disabled selected>Choose&hellip;</option>{% endif %}
+        {% for n in configs %}<option value="{{ n }}" {% if form.config == n %}selected{% endif %}>{{ config_label(n) }}</option>{% endfor %}
+      </select>
+    </label>
+    {% else %}
+    <input type="hidden" name="config" value="{{ form.config }}">
+    {% endif %}
+    {% if form.config %}
+    <label>Site
+      <select name="site_id" id="site-select">
+        <option value="" {% if not form.site_id %}selected{% endif %} disabled>Choose&hellip;</option>
+        <option value="{{ all_sites }}" data-guest-only {% if form.site_id == all_sites %}selected{% endif %}>All sites (guests only)</option>
+        {% for s in sites %}<option value="{{ s.id }}" {% if form.site_id == s.id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
+      </select>
+    </label>
+    {% endif %}
+  </div>
+  {% endif %}
+  <label>First password
+    <div class="input-row">
+      <input name="password" value="{{ form.password }}" class="mono" minlength="8" required autocomplete="off"
+             autocapitalize="none" autocorrect="off" spellcheck="false">
+    </div>
+    <span class="hint">Give this to the user. They must change it at first sign-in.</span>
+  </label>
+  <button class="primary block">Add user</button>
+</form>
+{% endblock %}

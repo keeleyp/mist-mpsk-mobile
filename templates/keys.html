@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}{{ heading }} - MPSK{% endblock %}
+{% block back %}{% if back_url %}<a class="back" href="{{ back_url }}" aria-label="Back">&lsaquo;</a>{% else %}<span class="back-spacer"></span>{% endif %}{% endblock %}
+{% block heading %}{{ heading }}{% endblock %}
+{% block content %}
+{% if subtitle %}<p class="muted small center">{{ subtitle }}</p>{% endif %}
+{% set usable = wlans|selectattr('usable')|list %}
+{% if usable %}
+<a class="primary block fab-like" href="{{ new_url }}">+ New {{ 'guest key' if guest_view else 'PSK' }}</a>
+{% endif %}
+{% if not guest_view %}
+{% for w in wlans if not w.usable %}
+<div class="flash warn small"><b>{{ w.ssid }}</b> {{ w.problem }}.</div>
+{% endfor %}
+{% endif %}
+{% if not usable %}<div class="flash warn small">{{ none_usable }}</div>{% endif %}
+{% if guest_view %}<p class="muted small">Showing guest keys only.</p>{% endif %}
+{% if psks %}
+<input type="search" class="search" placeholder="Search {{ psks|length }} key{{ '' if psks|length == 1 else 's' }}" data-filter="#psks"
+       autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
+{% endif %}
+<div class="list" id="psks">
+  {% for p in psks %}
+  {% set expired = p.expire_time and p.expire_time < now %}
+  <a class="row" href="{{ p._url }}" data-text="{{ (p.name ~ ' ' ~ p.ssid ~ ' ' ~ vlan_text(p) ~ ' ' ~ (p.role or ''))|lower }}">
+    <span class="row-main">
+      <span class="row-title">{{ p.name }}{% if p.role and not guest_view %} <span class="tag">{{ p.role }}</span>{% endif %}{% if expired %} <span class="tag err">expired</span>{% endif %}</span>
+      <span class="row-sub">{{ p.ssid }}{% if vlan_text(p) %} &middot; VLAN {{ vlan_text(p) }}{% endif %}{% if p.usage == 'single' %} &middot; single device{% endif %}{% if p.expire_time and not expired %} &middot; until {{ fmt_expiry(p.expire_time) }}{% endif %}</span>
+    </span>
+    <span class="chev">&rsaquo;</span>
+  </a>
+  {% else %}
+  <div class="empty">No {{ 'guest keys' if guest_view else 'PSKs' }} here yet.</div>
+  {% endfor %}
+  <div class="empty" data-no-match hidden>No key matches.</div>
+</div>
+{% endblock %}

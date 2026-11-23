@@ -22,9 +22,11 @@
   <details class="menu">
     <summary aria-label="Menu">&#8942;</summary>
     <div class="menu-body">
-      <div class="muted small">Signed in as <b>{{ user.name }}</b>{% if read_only %} (read-only){% endif %}</div>
-      {% if config_name %}<div class="muted small">Config: {{ config_name }}</div>{% endif %}
+      <div class="muted small">Signed in as <b>{{ user.name }}</b> &middot; {{ roles[user.role] }}{% if user.role != 'admin' and user.site_name %} &middot; {{ user.site_name }}{% endif %}</div>
+      {% if config_name and is_admin %}<div class="muted small">Org config: {{ config_name }}</div>{% endif %}
       {% if config_count > 1 %}<a href="{{ url_for('configs') }}">Change org</a>{% endif %}
+      {% if can_manage_users %}<a href="{{ url_for('users_page') }}">Users</a>{% endif %}
+      <a href="{{ url_for('change_password') }}">Change password</a>
       <a href="{{ url_for('index', refresh=1) }}">Reload site list</a>
       <form method="post" action="{{ url_for('logout') }}">
         <input type="hidden" name="csrf" value="{{ csrf }}">
@@ -41,6 +43,18 @@
   {% endwith %}
   {% block content %}{% endblock %}
 </main>
+{% if user %}
+<footer class="userbar">
+  <span class="muted small">{{ user.name }} &middot; {{ roles[user.role] }}</span>
+  <span class="userbar-links">
+    {% if can_manage_users and not user.must_change %}<a href="{{ url_for('users_page') }}">Users</a>{% endif %}
+    <form method="post" action="{{ url_for('logout') }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="link danger">Sign out</button>
+    </form>
+  </span>
+</footer>
+{% endif %}
 <script src="{{ url_for('static', filename='app.js') }}?v={{ version }}"></script>
 </body>
 </html>

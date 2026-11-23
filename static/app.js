@@ -115,3 +115,39 @@
     });
   });
 })();
+
+// Users: confirm deletes, role-dependent fields, reload sites when the org changes.
+(function () {
+  "use strict";
+  document.querySelectorAll("form[data-confirm]").forEach(function (f) {
+    f.addEventListener("submit", function (e) { if (!confirm(f.dataset.confirm)) e.preventDefault(); });
+  });
+  var form = document.getElementById("user-form");
+  if (!form) return;
+  var radios = form.querySelectorAll("input[name=role]");
+  var scope = form.querySelector("[data-scope]");
+  var siteSel = document.getElementById("site-select");
+  function syncRole() {
+    var checked = form.querySelector("input[name=role]:checked");
+    var role = checked ? checked.value : "guest";
+    form.querySelectorAll("[data-role-hint]").forEach(function (h) { h.hidden = h.dataset.roleHint !== role; });
+    if (scope) scope.hidden = role === "admin";
+    if (siteSel) {
+      siteSel.required = role !== "admin";
+      var all = siteSel.querySelector("[data-guest-only]");
+      if (all) {
+        all.hidden = all.disabled = role !== "guest";
+        if (role !== "guest" && siteSel.value === all.value) siteSel.value = "";
+      }
+    }
+  }
+  radios.forEach(function (r) { r.addEventListener("change", syncRole); });
+  syncRole();
+  var cfg = form.querySelector("[data-reload-on-change]");
+  if (cfg) cfg.addEventListener("change", function () {
+    var checked = form.querySelector("input[name=role]:checked");
+    var q = new URLSearchParams({ config: cfg.value, name: form.elements.name.value,
+                                  role: checked ? checked.value : "guest" });
+    location.href = form.getAttribute("action") + "?" + q.toString();
+  });
+})();

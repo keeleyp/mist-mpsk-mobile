@@ -3,6 +3,8 @@
 *.ini
 !*.ini.example
 web.conf
+users.json
+.users-*.json
 .secret_key
 certs/
 *.pem

@@ -256,6 +256,43 @@ class Mist:
             raise MpskError("That PSK is not at this site.")
         return p
 
+    # -- org-level keys (Cloud PSKs) -------------------------------------
+
+    def org_wlans(self) -> list:
+        """SSIDs that use org-level keys: WPA2/3 Personal with dynamic PSK
+        from Cloud PSKs. Same shape as site_wlans()."""
+        out = {}
+        for w in self.get_all(f"/orgs/{self.cfg.org_id}/wlans"):
+            if w.get("enabled", True) is False or not w.get("ssid"):
+                continue
+            if (w.get("auth") or {}).get("type") not in PSK_AUTH_TYPES:
+                continue
+            dpsk = w.get("dynamic_psk") or {}
+            if not (dpsk.get("enabled") and dpsk.get("source") == "cloud_psks"):
+                continue
+            e = out.setdefault(w["ssid"], {"ssid": w["ssid"], "hidden": False, "problem": None,
+                                           "psk_wlans": 0, "usable": True})
+            e["hidden"] = e["hidden"] or bool(w.get("hide_ssid"))
+            e["psk_wlans"] += 1
+        result = [e for e in out.values() if not self.cfg.ssids or e["ssid"] in self.cfg.ssids]
+        return sorted(result, key=lambda e: e["ssid"].lower())
+
+    def org_psks(self) -> list:
+        return sorted(self.get_all(f"/orgs/{self.cfg.org_id}/psks"),
+                      key=lambda p: ((p.get("name") or "").lower(), p.get("ssid") or ""))
+
+    def org_psk(self, psk_id: str) -> dict:
+        p = self.request("GET", f"/orgs/{self.cfg.org_id}/psks/{psk_id}")
+        if p.get("site_id"):
+            raise MpskError("That is a site PSK, not an org-level one.")
+        return p
+
+    def create_org_psk(self, body: dict) -> dict:
+        return self.request("POST", f"/orgs/{self.cfg.org_id}/psks", json=body)
+
+    def delete_org_psk(self, psk_id: str) -> None:
+        self.request("DELETE", f"/orgs/{self.cfg.org_id}/psks/{psk_id}")
+
     # -- writes -----------------------------------------------------------
 
     def create_psk(self, site_id: str, body: dict) -> dict:
@@ -299,7 +336,7 @@ def generate_passphrase(cfg: Config, avoid=()) -> str:
             return key
 
 
-def validate_new_psk(form: dict, wlans: list, existing: list) -> tuple[dict, list]:
+def validate_new_psk(form: dict, wlans: list, existing: list, role: str | None = None) -> tuple[dict, list]:
     """Turns the New PSK form into a Mist POST body. Returns (body, problems)."""
     problems = []
     name = (form.get("name") or "").strip()
@@ -331,6 +368,8 @@ def validate_new_psk(form: dict, wlans: list, existing: list) -> tuple[dict, lis
         problems.append("Usage must be multi or single.")
 
     body = {"name": name, "ssid": ssid, "passphrase": passphrase, "usage": usage}
+    if role:
+        body["role"] = role
     if vlan_raw:
         if vlan_raw.isdigit() and 1 <= int(vlan_raw) <= 4094:
             body["vlan_id"] = int(vlan_raw)
