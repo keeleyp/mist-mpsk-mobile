@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Sign in - MPSK{% endblock %}
+{% block heading %}MPSK{% endblock %}
+{% block content %}
+<div class="hero">
+  <img src="{{ url_for('static', filename='icons/icon-192.png') }}" alt="" width="72" height="72">
+  <h1>Mist MPSK</h1>
+  <p class="muted">Create Wi-Fi keys for your Mist sites.</p>
+</div>
+<form method="post" action="{{ url_for('login') }}" class="card">
+  <label>User name
+    <input name="username" value="{{ username or '' }}" autocomplete="username" autocapitalize="none"
+           autocorrect="off" spellcheck="false" required>
+  </label>
+  <label>Password
+    <input name="password" type="password" autocomplete="current-password" required>
+  </label>
+  <button class="primary block">Sign in</button>
+</form>
+<p class="muted small center">Tip: use <b>Share &rarr; Add to Home Screen</b> (iPhone) or
+  <b>&#8942; &rarr; Add to Home screen</b> (Android) to get an app icon.</p>
+{% endblock %}

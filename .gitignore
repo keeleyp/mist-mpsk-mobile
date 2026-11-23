@@ -1,0 +1,16 @@
+# Configs hold API tokens; web.conf holds password hashes; .secret_key signs
+# sessions; certs/ holds the HTTPS key. Only templates are tracked.
+*.ini
+!*.ini.example
+web.conf
+.secret_key
+certs/
+*.pem
+*.key
+*.log
+*.log.[0-9]*
+__pycache__/
+*.pyc
+.venv/
+venv/
+.claude/

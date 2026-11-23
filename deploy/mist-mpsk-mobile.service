@@ -1,0 +1,15 @@
+[Unit]
+Description=Mist MPSK Mobile (web)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/home/pi/mist-mpsk-mobile
+ExecStart=/home/pi/mist-mpsk-mobile/.venv/bin/python3 app.py
+Restart=on-failure
+RestartSec=5
+User=pi
+# The app refuses to start if web.conf is missing or invalid; see the journal.
+
+[Install]
+WantedBy=multi-user.target

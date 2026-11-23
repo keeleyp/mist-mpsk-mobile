@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}Offline - MPSK{% endblock %}
+{% block heading %}Offline{% endblock %}
+{% block content %}
+<div class="flash warn">Can't reach the MPSK server. Check you're on the right network (or VPN), then try again.</div>
+<button class="primary block" onclick="location.reload()">Try again</button>
+{% endblock %}

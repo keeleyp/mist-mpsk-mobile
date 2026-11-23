@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Choose org - MPSK{% endblock %}
+{% block heading %}Choose org{% endblock %}
+{% block content %}
+<div class="list">
+  {% for r in rows %}
+  <form method="post" action="{{ url_for('configs') }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="config" value="{{ r.name }}">
+    <button class="row" {% if r.error %}disabled{% endif %}>
+      <span class="row-main">
+        <span class="row-title">{{ r.label or r.name }}</span>
+        <span class="row-sub">{% if r.error %}<span class="err-text">{{ r.error }}</span>{% else %}{{ r.name }} &middot; {{ r.cloud }}{% endif %}</span>
+      </span>
+      <span class="chev">&rsaquo;</span>
+    </button>
+  </form>
+  {% endfor %}
+</div>
+{% endblock %}

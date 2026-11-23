@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}Problem - MPSK{% endblock %}
+{% block back %}<a class="back" href="javascript:history.back()" aria-label="Back">&lsaquo;</a>{% endblock %}
+{% block heading %}Problem{% endblock %}
+{% block content %}
+<div class="flash error">{{ message }}</div>
+<a class="secondary block" href="{{ url_for('index') }}">Back to sites</a>
+{% endblock %}

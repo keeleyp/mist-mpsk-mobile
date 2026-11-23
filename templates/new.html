@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}New PSK - MPSK{% endblock %}
+{% block back %}<a class="back" href="{{ url_for('site', site_id=site.id) }}" aria-label="Back">&lsaquo;</a>{% endblock %}
+{% block heading %}New PSK{% endblock %}
+{% block content %}
+<p class="muted small center">{{ site.name }}</p>
+{% if problems %}<div class="flash error">{% for p in problems %}<div>{{ p }}</div>{% endfor %}</div>{% endif %}
+<form method="post" class="card" id="new-psk">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label>Name
+    <input name="name" value="{{ form.name or '' }}" maxlength="64" required placeholder="e.g. Reception iPad"
+           autocomplete="off">
+  </label>
+  <label>SSID
+    <select name="ssid" required>
+      {% if not form.ssid %}<option value="" disabled selected>Choose&hellip;</option>{% endif %}
+      {% for w in wlans if w.usable %}
+      <option value="{{ w.ssid }}" {% if form.ssid == w.ssid %}selected{% endif %}>{{ w.ssid }}{% if w.hidden %} (hidden){% endif %}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Passphrase
+    <div class="input-row">
+      <input name="passphrase" id="passphrase" value="{{ form.passphrase }}" minlength="8" maxlength="63" required
+             class="mono" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false"
+             data-alphabet="{{ alphabet }}" data-length="{{ length }}">
+      <button type="button" class="icon-btn" data-regen="#passphrase" aria-label="Generate new passphrase" title="Generate">&#x21bb;</button>
+    </div>
+    <span class="hint">Generated for you &mdash; tap &#x21bb; for another, or type your own (8&ndash;63 characters).</span>
+  </label>
+  <label>VLAN <span class="muted">(optional)</span>
+    <input name="vlan" value="{{ form.vlan or '' }}" inputmode="text" placeholder="Blank = WLAN default"
+           autocomplete="off" autocapitalize="none">
+    <span class="hint">1&ndash;4094 or a site variable such as <span class="mono">{{ '{{guest_vlan}}' }}</span></span>
+  </label>
+  <label>Expires
+    <select name="expiry" id="expiry">
+      {% set e = form.expiry or '' %}
+      <option value="" {% if e == '' %}selected{% endif %}>Never</option>
+      <option value="1d" {% if e == '1d' %}selected{% endif %}>In 1 day</option>
+      <option value="7d" {% if e == '7d' %}selected{% endif %}>In 7 days</option>
+      <option value="30d" {% if e == '30d' %}selected{% endif %}>In 30 days</option>
+      <option value="90d" {% if e == '90d' %}selected{% endif %}>In 90 days</option>
+      <option value="date" {% if e and e not in ['1d','7d','30d','90d'] %}selected{% endif %}>On a date&hellip;</option>
+    </select>
+    <input type="date" name="expiry_date" id="expiry-date" min="{{ today }}" {% if e and e not in ['1d','7d','30d','90d','date'] %}value="{{ e }}"{% else %}hidden{% endif %}>
+  </label>
+  <fieldset class="seg">
+    <legend>Devices</legend>
+    <label><input type="radio" name="usage" value="multi" {% if form.usage != 'single' %}checked{% endif %}> Any number</label>
+    <label><input type="radio" name="usage" value="single" {% if form.usage == 'single' %}checked{% endif %}> First device only</label>
+  </fieldset>
+  <button class="primary block">Create PSK</button>
+</form>
+{% endblock %}

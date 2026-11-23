@@ -1,0 +1,33 @@
+; Mist MPSK Mobile - one .ini per org. Copy to e.g. customer-a.ini in the app
+; folder and fill in; list it under a user's "configs" in web.conf.
+; A mist_mpsk_generator.ini works as-is (its [files] and [pdf] are ignored).
+; The real .ini holds your API token: it is git-ignored, keep it that way.
+
+[mist]
+; API host for the org's cloud, e.g. api.mist.com, api.eu.mist.com, api.gc3.mist.com
+; (short names also work: global, eu, gc1, gc2, gc3, ac2 ...)
+cloud = api.eu.mist.com
+; Needs write access to the sites (Org Admin, or Site Admin on them) to create PSKs.
+api_token = YOUR_API_TOKEN
+org_id = 00000000-0000-0000-0000-000000000000
+
+[psk]
+; Characters generated keys are built from. This default leaves out look-alikes
+; (0 O 1 l I) and QR-escaped characters (\ ; , : ").
+allowed_characters = ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!#$%&*+-=?@
+; Generated key length, 8-63
+length = 12
+
+; Optional.
+;[app]
+; Name shown at the top of the site list (default: the org's name in Mist).
+;name = Customer A
+; Only offer these SSIDs (comma-separated). Default: every SSID that can use site PSKs.
+;ssids = Corp-PSK, IoT-PSK
+
+; Optional - only needed behind a TLS-inspecting proxy such as Zscaler.
+;[network]
+;ca_bundle = ~/certs/zscaler_root_ca.pem
+;verify_ssl = true
+;http_proxy = http://proxy.example.com:8080
+;https_proxy = http://proxy.example.com:8080

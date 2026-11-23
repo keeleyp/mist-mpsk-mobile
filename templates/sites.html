@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Sites - MPSK{% endblock %}
+{% block heading %}{{ org_name }}{% endblock %}
+{% block content %}
+<input type="search" class="search" placeholder="Search {{ sites|length }} site{{ '' if sites|length == 1 else 's' }}"
+       data-filter="#sites" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
+{% if recent %}
+<div class="section-label" data-hide-when-filtering>Recent</div>
+<div class="list" data-hide-when-filtering>
+  {% for s in recent %}
+  <a class="row" href="{{ url_for('site', site_id=s.id) }}"><span class="row-main"><span class="row-title">{{ s.name }}</span></span><span class="chev">&rsaquo;</span></a>
+  {% endfor %}
+</div>
+{% endif %}
+<div class="section-label">All sites</div>
+<div class="list" id="sites">
+  {% for s in sites %}
+  <a class="row" href="{{ url_for('site', site_id=s.id) }}" data-text="{{ s.name|lower }}"><span class="row-main"><span class="row-title">{{ s.name }}</span></span><span class="chev">&rsaquo;</span></a>
+  {% else %}
+  <div class="empty">This org has no sites.</div>
+  {% endfor %}
+  <div class="empty" data-no-match hidden>No site matches.</div>
+</div>
+{% endblock %}

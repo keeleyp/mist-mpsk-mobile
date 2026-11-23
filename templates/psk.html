@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}{{ psk.name }} - MPSK{% endblock %}
+{% block back %}<a class="back" href="{{ url_for('site', site_id=site.id) }}" aria-label="Back">&lsaquo;</a>{% endblock %}
+{% block heading %}{{ psk.name }}{% endblock %}
+{% block content %}
+{% if expired %}<div class="flash error">This PSK has expired &mdash; devices can no longer join with it.</div>{% endif %}
+<div class="card qr-card">
+  <div class="qr" aria-label="Wi-Fi QR code">{{ qr }}</div>
+  <p class="muted small center">Scan with the phone camera to join <b>{{ psk.ssid }}</b></p>
+  <div class="kv">
+    <div><span class="k">Wi-Fi</span><span class="v">{{ psk.ssid }}{% if hidden %} <span class="tag">hidden</span>{% endif %}</span></div>
+    <div><span class="k">Password</span>
+      <span class="v pass">
+        <span class="mono" id="pass" data-secret>{{ psk.passphrase }}</span>
+        <button type="button" class="icon-btn" data-copy="#pass" aria-label="Copy password">Copy</button>
+      </span>
+    </div>
+  </div>
+</div>
+<div class="actions">
+  <button type="button" class="primary block" id="share"
+          data-png="{{ url_for('psk_png', site_id=site.id, psk_id=psk.id) }}"
+          data-ssid="{{ psk.ssid }}" data-pass="{{ psk.passphrase }}" data-title="{{ site.name }} - {{ psk.name }}">Share&hellip;</button>
+  <a class="secondary block" href="{{ url_for('psk_png', site_id=site.id, psk_id=psk.id) }}" target="_blank" rel="noopener">Open QR image</a>
+</div>
+<div class="card">
+  <div class="kv">
+    <div><span class="k">Site</span><span class="v">{{ site.name }}</span></div>
+    <div><span class="k">VLAN</span><span class="v">{{ vlan_text(psk) or 'WLAN default' }}</span></div>
+    <div><span class="k">Devices</span><span class="v">{{ 'First device only' if psk.usage == 'single' else 'Any number' }}{% if psk.mac %} ({{ psk.mac }}){% endif %}</span></div>
+    <div><span class="k">Expires</span><span class="v">{{ fmt_expiry(psk.expire_time) }}</span></div>
+    {% if psk.created_time %}<div><span class="k">Created</span><span class="v">{{ fmt_expiry(psk.created_time) }}</span></div>{% endif %}
+  </div>
+</div>
+{% if not read_only %}
+<details class="card danger-zone">
+  <summary>Delete this PSK</summary>
+  <form method="post" action="{{ url_for('delete_psk', site_id=site.id, psk_id=psk.id) }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <p class="small">Devices using this key will lose Wi-Fi. Type <b>{{ psk.name }}</b> to confirm.</p>
+    <input name="confirm_name" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" required>
+    <button class="danger block">Delete PSK</button>
+  </form>
+</details>
+{% endif %}
+{% endblock %}

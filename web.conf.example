@@ -1,0 +1,29 @@
+# Copy to web.conf (git-ignored) and add a [user NAME] section per login.
+# Restart the app after editing (sudo systemctl restart mist-mpsk-mobile).
+
+[web]
+# 0.0.0.0 = reachable from phones on the network; 127.0.0.1 = this machine only.
+host = 0.0.0.0
+port = 5040
+# Phones stay signed in this long after they last used the app.
+session_hours = 12
+# Optional HTTPS (recommended - see README "HTTPS"). Relative paths are
+# relative to this file. Leave both out for plain HTTP.
+#certfile = certs/mpsk.crt
+#keyfile = certs/mpsk.key
+
+# One section per login: [user <name>]
+#   password_hash - make it with:  python3 app.py --hash-password
+#   configs       - the .ini files in the app folder this user may use,
+#                   comma-separated, or * for all of them. A user with one
+#                   config goes straight to its site list; with several they pick.
+#   read_only     - true = can view and share PSKs but not create or delete them.
+[user philip]
+password_hash = PASTE_OUTPUT_OF_hash-password_HERE
+configs = *
+read_only = false
+
+[user store-manager]
+password_hash = PASTE_OUTPUT_OF_hash-password_HERE
+configs = customer-a.ini
+read_only = false
