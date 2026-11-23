@@ -14,7 +14,7 @@ Configs use the same `.ini` format as [mist-mpsk-generator](https://github.com/k
 
 ## Users and roles
 
-On first start the app creates the user **admin** with password **admin**. Whoever signs in first with it has to choose a new password before doing anything else, and so does every new user and every user whose password is reset.
+On first start the app creates the user **admin** with password **admin**. Whoever signs in first with it has to choose a new password before doing anything else, and so does every new user and every user whose password is reset. The exception is **self service** users: staff use the password they were given to sign the kiosk in and out, so no change is forced.
 
 | Role | Scope | Can |
 |---|---|---|

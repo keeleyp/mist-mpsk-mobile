@@ -161,7 +161,8 @@ class UserStore:
                                ssid=ssid if role in ("guest", "self_service") else None,
                                key_expiry=(key_expiry or "") if role == "self_service" else None)
             rec["password_hash"] = generate_password_hash(password)
-            rec["must_change"] = True
+            # A kiosk is signed in by staff with the password they were given, so no forced change.
+            rec["must_change"] = role != "self_service"
             self._users[name] = rec
             self._save()
             return dict(rec, name=name)

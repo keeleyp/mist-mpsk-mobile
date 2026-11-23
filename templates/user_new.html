@@ -68,7 +68,8 @@
   <label>First password
     <input name="password" value="{{ form.password }}" class="mono" minlength="8" required autocomplete="off"
            autocapitalize="none" autocorrect="off" spellcheck="false">
-    <span class="hint">Give this to the user. They must change it at first sign-in.</span>
+    <span class="hint" data-role-not="self_service">Give this to the user. They must change it at first sign-in.</span>
+    <span class="hint" data-role-only="self_service">Used to sign the kiosk in and out. No change is required.</span>
   </label>
   <button class="primary block">Add user</button>
 </form>

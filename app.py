@@ -37,7 +37,7 @@ import users as userlib
 from mpsk_core import MpskError
 from users import GUEST_PSK_ROLE, KEY_EXPIRY, ROLES, SELF_SERVICE_PSK_ROLE, UserError, UserStore
 
-__version__ = "1.2.0"
+__version__ = "1.2.1"
 
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_WEB_CONF = BASE_DIR / "web.conf"
@@ -807,7 +807,7 @@ def create_app(web_conf: dict, store: UserStore, config_folder: Path = BASE_DIR,
     def reset_user(name):
         u, t = target_user(name)
         password = userlib.temp_password()
-        store.set_password(t["name"], password, must_change=True)
+        store.set_password(t["name"], password, must_change=t["role"] != "self_service")
         activity("reset password", target=t["name"])
         return render_template("user_created.html", created=store.get(t["name"]), password=password,
                                reset=True, config_label=config_label)

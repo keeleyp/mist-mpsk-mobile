@@ -133,6 +133,7 @@
     form.querySelectorAll("[data-role-hint]").forEach(function (h) { h.hidden = h.dataset.roleHint !== role; });
     if (scope) scope.hidden = role === "admin";
     form.querySelectorAll("[data-role-only]").forEach(function (el) { el.hidden = el.dataset.roleOnly !== role; });
+    form.querySelectorAll("[data-role-not]").forEach(function (el) { el.hidden = el.dataset.roleNot === role; });
     var ssidScope = form.querySelector("[data-ssid-scope]");
     if (ssidScope) ssidScope.hidden = !(role === "guest" || role === "self_service");
     var ssidSel = document.getElementById("ssid-select");

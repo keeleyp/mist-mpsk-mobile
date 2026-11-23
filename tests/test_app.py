@@ -238,6 +238,10 @@ class TestSiteAdmin(Base):
                                             "ssid": "Corp-PSK", "key_expiry": "7d", "password": "desk-first-1"})
         self.assertIn(b"User added", r.data)
         self.assertEqual(self.store.get("desk")["key_expiry"], "7d")
+        self.assertFalse(self.store.get("desk")["must_change"])          # kiosk users aren't forced
+        self.assertTrue(self.store.get("gail")["must_change"])
+        self.c.post("/users/desk/reset", data={"csrf": self.csrf})
+        self.assertFalse(self.store.get("desk")["must_change"])
         self.add("other", "guest", "s2", "Manchester Store")
         self.assertEqual(self.c.post("/users/other/delete", data={"csrf": self.csrf}).status_code, 403)
         self.assertEqual(self.c.post("/users/admin/reset", data={"csrf": self.csrf}).status_code, 403)

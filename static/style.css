@@ -125,3 +125,10 @@ button.link.danger { color: var(--danger); }
 .fixed-field { margin: 0 0 14px; padding: 12px; border-radius: 10px; background: var(--bg); border: 1px solid var(--border); }
 .kiosk-form input { font-size: 18px; }
 .kiosk-pass { font-size: 22px; letter-spacing: .03em; user-select: all; -webkit-user-select: all; }
+/* Kiosk key screen: everything incl. Finished fits on a small phone without scrolling */
+.kiosk-done { display: flex; flex-direction: column; gap: 10px; }
+.kiosk-welcome { margin: 0; text-align: center; }
+.kiosk-qr { width: min(52vw, 42vh, 260px); padding: 6px; }
+.kiosk-kv { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 0 12px; }
+.kiosk-kv > div { padding: 7px 0; }
+.kiosk-note { margin: 0; }

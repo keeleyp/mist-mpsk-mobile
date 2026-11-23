@@ -14,7 +14,7 @@
     {% if created.ssid %}<div><span class="k">SSID</span><span class="v">{{ created.ssid }}</span></div>{% endif %}
     {% if created.role == 'self_service' %}<div><span class="k">Visitor keys last</span><span class="v">{{ key_expiry_choices.get(created.key_expiry or '', '') }}</span></div>{% endif %}
   </div>
-  <p class="muted small">They'll be asked to choose their own password when they first sign in.</p>
+  <p class="muted small">{% if created.role == 'self_service' %}Use this password to sign the kiosk in, and to sign it out again.{% else %}They'll be asked to choose their own password when they first sign in.{% endif %}</p>
 </div>
 <a class="secondary block" href="{{ url_for('users_page') }}">Back to users</a>
 {% endblock %}
